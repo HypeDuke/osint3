@@ -6,6 +6,7 @@ from telegram.ext import Updater, CommandHandler
 import threading
 from flask import Flask
 from telegram import InputFile
+import random
 
 # Load biến môi trường
 load_dotenv()
