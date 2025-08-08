@@ -114,7 +114,7 @@ def search():
         return jsonify({"error": "missing q parameter"}), 400
     body = {
         "query": {
-            "match_phrase": {
+            "wildcard": {
                 "line": {
                     "value": f"*{q}*",
                     "case_insensitive": True
