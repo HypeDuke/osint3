@@ -7,7 +7,6 @@ services:
       - discovery.type=single-node
       - xpack.security.enabled=false
       - ES_JAVA_OPTS=-Xms512m -Xmx512m
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
     ports:
       - "9200:9200"
     volumes:
@@ -31,6 +30,8 @@ services:
     container_name: telebot
     env_file:
       - ./telebot/.env
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
     depends_on:
       - crawler
     restart: unless-stopped
