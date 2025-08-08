@@ -6,6 +6,9 @@ from dotenv import load_dotenv
 from elasticsearch import Elasticsearch, helpers
 from flask import Flask, request, jsonify
 import xxhash
+import tempfile
+import threading
+
 
 load_dotenv()
 
@@ -21,6 +24,10 @@ STATE_FILE = Path(STATE_FOLDER) / "state.json"
 es = Elasticsearch(ELASTIC_HOST)
 
 app = Flask(__name__)
+
+TEMP_FILES = []
+
+
 
 # State format: { "files": { "<relpath>": {"mtime": float, "size": int, "fingerprint": str} }, "last_indexed": <ts> }
 if STATE_FILE.exists():
@@ -106,10 +113,27 @@ def scan_and_index():
     except Exception:
         pass
 
+def cleanup_temp_files():
+    while True:
+        time.sleep(60)
+        now = time.time()
+        for fpath, ctime in list(TEMP_FILES):
+            if now - ctime > 600:  # 10 phút
+                try:
+                    os.remove(fpath)
+                    TEMP_FILES.remove((fpath, ctime))
+                except Exception:
+                    pass
+
+# Khởi chạy thread cleanup 1 lần ở main
+threading.Thread(target=cleanup_temp_files, daemon=True).start()
+
 @app.route("/search", methods=["GET"])
 def search():
     q = request.args.get("q", "")
     size = int(request.args.get("size", 50))
+    outfile = request.args.get("outfile", None)
+
     if not q:
         return jsonify({"error": "missing q parameter"}), 400
     body = {
@@ -135,6 +159,16 @@ def search():
             "lineno": s.get("lineno"),
             "score": h.get("_score"),
         })
+
+    if outfile:
+        # Tạo file txt tạm và ghi toàn bộ kết quả vào
+        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".txt") as f:
+            for hit in hits:
+                f.write(f"{hit['path']}:{hit['lineno']}: {hit['line']}\n")
+            temp_path = f.name
+        TEMP_FILES.append((temp_path, time.time()))
+        return jsonify({"total": res.get("hits", {}).get("total", {}), "file_path": temp_path})
+   
     return jsonify({"total": res.get("hits", {}).get("total", {}), "hits": hits})
 
 def background_loop():
