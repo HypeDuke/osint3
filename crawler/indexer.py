@@ -115,7 +115,10 @@ def search():
     body = {
         "query": {
             "match_phrase": {
-                "line": q
+                "line": {
+                    "value": f"*{q}*",
+                    "case_insensitive": True
+                }
             }
         },
         "size": size,
