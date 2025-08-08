@@ -7,6 +7,9 @@ import threading
 from flask import Flask
 from telegram import InputFile
 import random
+from io import BytesIO
+
+
 
 # Load biến môi trường
 load_dotenv()
@@ -75,15 +78,15 @@ def outfile_cmd(update: Update, context):
             
             with open(file_path, "rb") as f:
                 update.message.reply_document(document=InputFile(f, filename=f"search_{query}.txt"))
-                
+
             # Gọi API download để lấy file về
-            download_url = f"{CRAWLER_API}/download"
-            download_resp = requests.get(download_url, params={"file_path": file_path}, stream=True)
+            
+            download_resp = requests.get(f"{CRAWLER_API}/download", params={"file_path": file_path}, stream=True)
+
             if download_resp.status_code == 200:
-                from io import BytesIO
                 bio = BytesIO(download_resp.content)
                 bio.name = f"search_{query}.txt"
-                update.message.reply_document(document=bio)
+                update.message.reply_document(chat_id=chat_id, document=InputFile(bio))
             else:
                 update.message.reply_text(f"Failed to download file, status {download_resp.status_code}")
 
