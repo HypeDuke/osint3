@@ -1,0 +1,39 @@
+
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.12.2
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+
+  crawler:
+    build: ./crawler
+    container_name: crawler
+    volumes:
+      - /mnt/hgfs/sharevm:/app/data:ro
+      - crawler_state:/app/state
+    env_file:
+      - ./crawler/.env
+    ports:
+      - "5000:5000"
+    depends_on:
+      - elasticsearch
+
+  telebot:
+    build: ./telebot
+    container_name: telebot
+    env_file:
+      - ./telebot/.env
+    depends_on:
+      - crawler
+    restart: unless-stopped
+
+volumes:
+  esdata:
+  crawler_state:
