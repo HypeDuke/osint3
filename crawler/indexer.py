@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from dotenv import load_dotenv
 from elasticsearch import Elasticsearch, helpers
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 import xxhash
 import tempfile
 import threading
@@ -127,6 +127,13 @@ def cleanup_temp_files():
 
 # Khởi chạy thread cleanup 1 lần ở main
 threading.Thread(target=cleanup_temp_files, daemon=True).start()
+
+@app.route("/download", methods=["GET"])
+def download():
+    file_path = request.args.get("file_path")
+    if not file_path or not os.path.isfile(file_path):
+        return {"error": "File not found"}, 404
+    return send_file(file_path, as_attachment=True)
 
 @app.route("/search", methods=["GET"])
 def search():

@@ -65,7 +65,7 @@ def outfile_cmd(update: Update, context):
     update.message.reply_text(f"Generating file for: {query} ...")
 
     try:
-        r = requests.get(f"{CRAWLER_API}/search", params={"q": query, "size": 10000, "outfile": "1"}, timeout=60)
+        r = requests.get(f"{CRAWLER_API}/search", params={"q": query, "size": 10000, "outfile": "1"}, timeout=180)
         if r.status_code == 200:
             data = r.json()
             file_path = data.get("file_path")
@@ -75,6 +75,17 @@ def outfile_cmd(update: Update, context):
             
             with open(file_path, "rb") as f:
                 update.message.reply_document(document=InputFile(f, filename=f"search_{query}.txt"))
+                
+            # Gọi API download để lấy file về
+            download_url = f"{CRAWLER_API}/download"
+            download_resp = requests.get(download_url, params={"file_path": file_path}, stream=True)
+            if download_resp.status_code == 200:
+                from io import BytesIO
+                bio = BytesIO(download_resp.content)
+                bio.name = f"search_{query}.txt"
+                update.message.reply_document(document=bio)
+            else:
+                update.message.reply_text(f"Failed to download file, status {download_resp.status_code}")
 
         else:
             update.message.reply_text(f"Search error: {r.status_code}")
