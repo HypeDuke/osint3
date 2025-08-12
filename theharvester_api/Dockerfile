@@ -1,7 +1,9 @@
-FROM python:3.11-slim
+FROM debian:trixie-slim
 
-# Cài đặt các thư viện cần thiết
-RUN apt-get update && apt-get install -y --no-install-recommends \
+LABEL maintainer="@jay_townsend1 & @NotoriousRebel1"
+
+# Install dependencies for building Python from source
+RUN apt update && apt install -y \
     curl \
     build-essential \
     libssl-dev \
@@ -22,16 +24,29 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# Clone repo theHarvester trực tiếp từ GitHub
+# Install Python 3.13.6 from source
+RUN curl -fsSL https://www.python.org/ftp/python/3.13.6/Python-3.13.6.tgz -o Python-3.13.6.tgz \
+    && tar -xvf Python-3.13.6.tgz \
+    && cd Python-3.13.6 \
+    && ./configure --enable-optimizations \
+    && make -j 4 \
+    && make altinstall \
+    && rm -rf /Python-3.13.6 /Python-3.13.6.tgz
+
+# Install pip for Python 3.13
+RUN curl https://bootstrap.pypa.io/get-pip.py | python3.13
+
+# Clone theHarvester repository
 WORKDIR /app
 RUN git clone https://github.com/laramies/theHarvester.git
 
-# Cài đặt dependencies từ pyproject.toml (nếu có)
-# Cài tool build từ pyproject.toml
-RUN pip install --upgrade pip setuptools wheel poetry-core
+# Install theHarvester dependencies
 WORKDIR /app/theHarvester
-RUN pip install --no-cache-dir .
+RUN python3.13 -m pip install --upgrade pip setuptools wheel \
+    && python3.13 -m pip install --no-cache-dir .
 
-# Chạy API của theHarvester tại port 5100
+# Expose API port
 EXPOSE 5100
-CMD ["python", "restfulHarvest.py", "-b", "0.0.0.0", "-p", "5100"]
+
+# Run restfulHarvest on port 5100
+ENTRYPOINT ["python3.13", "restfulHarvest.py", "-b", "0.0.0.0", "-p", "5100"]
