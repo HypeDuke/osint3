@@ -116,7 +116,7 @@ def harvest_command(update: Update, context: CallbackContext):
         # Gọi API
         params = {
             "domain": domain,
-            "sources": sources,
+            "source": sources,
             "limit": limit
         }
         resp = requests.get(THEHARVESTER_API, params=params, timeout=60)
