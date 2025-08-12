@@ -42,6 +42,10 @@ services:
     ports:
       - "5100:5100"
     restart: unless-stopped
+    volumes:
+      - ./api-keys.yaml:/root/.theHarvester/api-keys.yaml
+      - ./api-keys.yaml:/etc/theHarvester/api-keys.yaml
+      
 
 volumes:
   esdata:
