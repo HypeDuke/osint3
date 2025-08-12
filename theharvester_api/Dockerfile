@@ -49,4 +49,4 @@ RUN python3.13 -m pip install --upgrade pip setuptools wheel \
 EXPOSE 5100
 
 # Run restfulHarvest on port 5100
-ENTRYPOINT ["python3.13", "restfulHarvest.py", "-b", "0.0.0.0", "-p", "5100"]
+ENTRYPOINT ["python3.13", "restfulHarvest.py", "-H", "0.0.0.0", "-p", "5100"]
