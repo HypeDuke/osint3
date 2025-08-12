@@ -135,7 +135,7 @@ def harvest_command(update: Update, context: CallbackContext):
         result_text = f"**Kết quả Harvest cho `{domain}`**\nNguồn: `{sources}`\nLimit: `{limit}`\n\n"
         result_text += "\n".join(data) if isinstance(data, list) else str(data)
 
-        update.message.reply_text(result_text[:4000], parse_mode="Markdown")
+        update.message.reply_text(result_text[:4000], parse_mode=None)
 
     except Exception as e:
         update.message.reply_text(f"❌ Lỗi: {str(e)}")
