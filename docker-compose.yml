@@ -36,6 +36,13 @@ services:
       - crawler
     restart: unless-stopped
 
+  theharvester_api:
+    build: ./theharvester_api
+    container_name: theharvester_api
+    ports:
+      - "5100:5100"
+    restart: unless-stopped
+
 volumes:
   esdata:
   crawler_state:
