@@ -15,8 +15,18 @@ from io import BytesIO
 load_dotenv()
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CRAWLER_API = os.getenv("CRAWLER_API", "http://crawler:5000")
-THEHARVESTER_API = os.getenv("THEHARVESTER_API", "http://theharvester_api:5100/harvest")
+THEHARVESTER_API = os.getenv("THEHARVESTER_API", "http://theharvester_api:5100/query")
 
+DEFAULT_SOURCES = (
+    "api_endpoints,baidu,bevigil,bufferoverun,builtwith,brave,censys,"
+    "certspotter,criminalip,crtsh,dehashed,dnsdumpster,duckduckgo,fullhunt,"
+    "github-code,hackertarget,haveibeenpwned,hudsonrock,hunter,hunterhow,"
+    "intelx,leaklookup,linkedin,linkedin_links,netcraft,netlas,omnisint,"
+    "onyphe,otx,pentesttools,projectdiscovery,qwant,rapiddns,rocketreach,"
+    "securityscorecard,securityTrails,shodan,subdomaincenter,"
+    "subdomainfinderc99,sublist3r,threatcrowd,threatminer,tomba,urlscan,"
+    "venacus,virustotal,whoisxml,yahoo,zoomeye,zoomeyeapi"
+)
 if not TELEGRAM_BOT_TOKEN:
     raise ValueError("TELEGRAM_BOT_TOKEN is not set!")
 
@@ -77,27 +87,58 @@ def search_cmd(update: Update, context):
         bot.send_message(chat_id=chat_id, text=f"Error during search: {e}")
 
 def harvest_command(update: Update, context: CallbackContext):
-    if not context.args:
-        update.message.reply_text("Usage: /harvest <domain> [source] [limit]")
-        return
-
-    domain = context.args[0]
-    source = context.args[1] if len(context.args) > 1 else "google"
-    limit = context.args[2] if len(context.args) > 2 else "100"
-
     try:
-        resp = requests.get(THEHARVESTER_API, params={
+        # Nội dung tin nhắn sau /harvest
+        args_text = " ".join(context.args)
+
+        # Tách domain và các tham số
+        domain = None
+        sources = DEFAULT_SOURCES
+        limit = 10
+
+        parts = args_text.split()
+        for i, part in enumerate(parts):
+            if part.startswith("-s"):
+                if i + 1 < len(parts):
+                    sources = parts[i + 1]
+            elif part.startswith("-l"):
+                if i + 1 < len(parts):
+                    limit = int(parts[i + 1])
+            else:
+                # Nếu chưa có domain thì lấy
+                if domain is None and not part.startswith("-"):
+                    domain = part
+
+        if not domain:
+            update.message.reply_text("❌ Bạn phải nhập domain.\nVí dụ: `/harvest example.com -s google -l 5`", parse_mode="Markdown")
+            return
+
+        # Gọi API
+        params = {
             "domain": domain,
-            "source": source,
+            "sources": sources,
             "limit": limit
-        })
-        if resp.status_code == 200:
-            data = resp.json()
-            update.message.reply_text(f"Results for {domain}:\n\n{data['output'][:3500]}")
-        else:
-            update.message.reply_text(f"Error: {resp.text}")
+        }
+        resp = requests.get(THEHARVESTER_API, params=params, timeout=60)
+
+        if resp.status_code != 200:
+            update.message.reply_text(f"⚠️ Lỗi API: {resp.status_code}")
+            return
+
+        data = resp.json()
+
+        if not data:
+            update.message.reply_text("🔍 Không tìm thấy kết quả.")
+            return
+
+        # Format kết quả (tùy chỉnh theo API)
+        result_text = f"**Kết quả Harvest cho `{domain}`**\nNguồn: `{sources}`\nLimit: `{limit}`\n\n"
+        result_text += "\n".join(data) if isinstance(data, list) else str(data)
+
+        update.message.reply_text(result_text[:4000], parse_mode="Markdown")
+
     except Exception as e:
-        update.message.reply_text(f"Request failed: {e}")
+        update.message.reply_text(f"❌ Lỗi: {str(e)}")
 
 def outfile_cmd(update: Update, context):
     query = ' '.join(context.args)
