@@ -27,6 +27,8 @@ WORKDIR /app
 RUN git clone https://github.com/laramies/theHarvester.git
 
 # Cài đặt dependencies từ pyproject.toml (nếu có)
+# Cài tool build từ pyproject.toml
+RUN pip install --upgrade pip setuptools wheel poetry-core
 WORKDIR /app/theHarvester
 RUN pip install --no-cache-dir .
 
