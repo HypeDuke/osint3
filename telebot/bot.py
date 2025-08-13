@@ -18,14 +18,14 @@ CRAWLER_API = os.getenv("CRAWLER_API", "http://crawler:5000")
 THEHARVESTER_API = os.getenv("THEHARVESTER_API", "http://theharvester_api:5100/query")
 
 DEFAULT_SOURCES = (
-    "api_endpoints,baidu,bevigil,bufferoverun,builtwith,brave,censys,"
-    "certspotter,criminalip,crtsh,dehashed,dnsdumpster,duckduckgo,fullhunt,"
+    "api_endpoints,baidu,,builtwith,brave,censys,"
+    "certspotter,criminalip,crtsh,dnsdumpster,duckduckgo,fullhunt,"
     "github-code,hackertarget,haveibeenpwned,hudsonrock,hunter,hunterhow,"
     "intelx,leaklookup,linkedin,linkedin_links,netcraft,netlas,omnisint,"
-    "onyphe,otx,pentesttools,projectdiscovery,qwant,rapiddns,rocketreach,"
+    "otx,pentesttools,projectdiscovery,qwant,rapiddns,rocketreach,"
     "securityscorecard,securityTrails,shodan,subdomaincenter,"
     "subdomainfinderc99,sublist3r,threatcrowd,threatminer,tomba,urlscan,"
-    "venacus,virustotal,whoisxml,yahoo,zoomeye,zoomeyeapi"
+    "virustotal,whoisxml,yahoo,zoomeye,zoomeyeapi"
 )
 if not TELEGRAM_BOT_TOKEN:
     raise ValueError("TELEGRAM_BOT_TOKEN is not set!")
@@ -36,6 +36,7 @@ app = Flask(__name__)
 
 MAX_MSG_LENGTH = 3500  # Telegram giới hạn độ dài tin nhắn
 
+'''
 # ---- Helpers ----
 def send_text_or_file(update: Update, text: str, filename: str):
     """Gửi text, nếu dài hơn giới hạn thì lưu ra file và gửi."""
@@ -48,7 +49,7 @@ def send_text_or_file(update: Update, text: str, filename: str):
         with open(tmp_path, "rb") as f:
             update.message.reply_document(InputFile(f, filename=filename))
         os.remove(tmp_path)
-
+'''
 
 # Endpoint Flask kiểm tra trạng thái bot
 @app.route("/health", methods=["GET"])
@@ -93,7 +94,7 @@ def harvest_command(update: Update, context: CallbackContext):
 
         # Tách domain và các tham số
         domain = None
-        sources = DEFAULT_SOURCES
+        sources = ["brave,duckduckgo"]
         limit = 10
 
         parts = args_text.split()
@@ -140,6 +141,13 @@ def harvest_command(update: Update, context: CallbackContext):
     except Exception as e:
         update.message.reply_text(f"❌ Lỗi: {str(e)}")
 
+def show_sources(update: Update, context: CallbackContext):
+    """Hiển thị danh sách các nguồn dữ liệu có sẵn."""
+    sources = DEFAULT_SOURCES.split(',')
+    formatted_sources = "\n".join(f"- {source.strip()}" for source in sources)
+    update.message.reply_text(f"**Danh sách nguồn dữ liệu:**\n{formatted_sources}", parse_mode="Markdown")      
+
+'''
 def outfile_cmd(update: Update, context):
     query = ' '.join(context.args)
     if not query:
@@ -168,7 +176,7 @@ def outfile_cmd(update: Update, context):
             update.message.reply_text(f"Search error: {r.status_code}")
     except Exception as e:
         update.message.reply_text(f"Error during file generation: {e}")
-
+'''
 
 def run_flask():
     app.run(host="0.0.0.0", port=8000 ,threaded=True)
@@ -181,8 +189,10 @@ if __name__ == '__main__':
     updater = Updater(token=TELEGRAM_BOT_TOKEN, use_context=True)
     dp = updater.dispatcher
     dp.add_handler(CommandHandler('search', search_cmd))
-    dp.add_handler(CommandHandler('outfile', outfile_cmd))
+    #dp.add_handler(CommandHandler('outfile', outfile_cmd))
     dp.add_handler(CommandHandler("harvest", harvest_command))
+    dp.add_handler(CommandHandler("source", show_sources))
+
 
     updater.start_polling()
     updater.idle()
