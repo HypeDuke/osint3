@@ -149,26 +149,38 @@ def show_sources(update: Update, context: CallbackContext):
     update.message.reply_text(f"**Danh sách nguồn dữ liệu:**\n{formatted_sources}", parse_mode="Markdown")     
 
 def tweetfeed(update: Update, context: CallbackContext):
-    """Lấy danh sách IOCs từ TweetFeed."""
+    """Lấy danh sách IOCs từ TweetFeed API."""
     try:
         response = requests.get(TWEETFEED_API, timeout=30)
         if response.status_code == 200:
             data = response.json()
-            if not data or 'iocs' not in data:
+            if not data:
                 update.message.reply_text("Không có IOCs mới.")
                 return
-            
-            iocs = data['iocs']
-            if not iocs:
-                update.message.reply_text("Không có IOCs mới.")
-                return
-            
-            formatted_iocs = "\n".join(f"- {ioc}" for ioc in iocs)
-            update.message.reply_text(f"**Danh sách IOCs hôm nay:**\n{formatted_iocs}", parse_mode="Markdown")
+
+            formatted_iocs = []
+            for item in data:
+                date = item.get("date", "N/A")
+                ioc_type = item.get("type", "N/A")
+                value = item.get("value", "N/A")
+                tags = " ".join(item.get("tags", [])) if item.get("tags") else ""
+                tweet_url = item.get("tweet", "")
+                user = item.get("user", "N/A")
+
+                formatted_iocs.append(
+                    f"📅 {date}\n👤 {user}\n🔍 {ioc_type}: `{value}`\n🏷 {tags}\n🔗 {tweet_url}"
+                )
+
+            update.message.reply_text(
+                "**Danh sách IOCs hôm nay:**\n\n" + "\n\n".join(formatted_iocs),
+                parse_mode="Markdown",
+                disable_web_page_preview=True
+            )
         else:
             update.message.reply_text(f"Lỗi khi lấy dữ liệu: {response.status_code}")
     except Exception as e:
-        update.message.reply_text(f"Lỗi: {str(e)}")     
+        update.message.reply_text(f"Lỗi: {str(e)}")
+     
 
 def show_help(update: Update, context: CallbackContext):
     """Hiển thị hướng dẫn sử dụng bot."""
