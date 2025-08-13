@@ -16,14 +16,15 @@ load_dotenv()
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CRAWLER_API = os.getenv("CRAWLER_API", "http://crawler:5000")
 THEHARVESTER_API = os.getenv("THEHARVESTER_API", "http://theharvester_api:5100/query")
+TWEETFEED_API = os.getenv("TWEETFEED_API", "https://api.tweetfeed.live/v1/today")
 
 DEFAULT_SOURCES = (
     "api_endpoints,baidu,,builtwith,brave,censys,"
     "certspotter,criminalip,crtsh,dnsdumpster,duckduckgo,fullhunt,"
-    "github-code,hackertarget,haveibeenpwned,hudsonrock,hunter,hunterhow,"
-    "intelx,leaklookup,linkedin,linkedin_links,netcraft,netlas,omnisint,"
-    "otx,pentesttools,projectdiscovery,qwant,rapiddns,rocketreach,"
-    "securityscorecard,securityTrails,shodan,subdomaincenter,"
+    "github-code,hudsonrock,hunter,hunterhow,"
+    "intelx,linkedin,linkedin_links,netcraft,netlas,omnisint,"
+    "otx,qwant,rapiddns,"
+    "securityTrails,shodan,subdomaincenter,"
     "subdomainfinderc99,sublist3r,threatcrowd,threatminer,tomba,urlscan,"
     "virustotal,whoisxml,yahoo,zoomeye,zoomeyeapi"
 )
@@ -145,7 +146,42 @@ def show_sources(update: Update, context: CallbackContext):
     """Hiển thị danh sách các nguồn dữ liệu có sẵn."""
     sources = DEFAULT_SOURCES.split(',')
     formatted_sources = "\n".join(f"- {source.strip()}" for source in sources)
-    update.message.reply_text(f"**Danh sách nguồn dữ liệu:**\n{formatted_sources}", parse_mode="Markdown")      
+    update.message.reply_text(f"**Danh sách nguồn dữ liệu:**\n{formatted_sources}", parse_mode="Markdown")     
+
+def tweetfeed(update: Update, context: CallbackContext):
+    """Lấy danh sách IOCs từ TweetFeed."""
+    try:
+        response = requests.get(TWEETFEED_API, timeout=30)
+        if response.status_code == 200:
+            data = response.json()
+            if not data or 'iocs' not in data:
+                update.message.reply_text("Không có IOCs mới.")
+                return
+            
+            iocs = data['iocs']
+            if not iocs:
+                update.message.reply_text("Không có IOCs mới.")
+                return
+            
+            formatted_iocs = "\n".join(f"- {ioc}" for ioc in iocs)
+            update.message.reply_text(f"**Danh sách IOCs hôm nay:**\n{formatted_iocs}", parse_mode="Markdown")
+        else:
+            update.message.reply_text(f"Lỗi khi lấy dữ liệu: {response.status_code}")
+    except Exception as e:
+        update.message.reply_text(f"Lỗi: {str(e)}")     
+
+def show_help(update: Update, context: CallbackContext):
+    """Hiển thị hướng dẫn sử dụng bot."""
+    help_text = """
+    **Hướng dẫn sử dụng bot:**
+
+    /search <query> - Tìm kiếm thông tin từ database
+    /ioc - Danh sách IOCs hàng ngày
+    /harvest <domain> -s <source> -l <limit> - Thu thập thông tin từ các nguồn osint
+    /source - Hiển thị danh sách các nguồn dữ liệu
+    /help - Hiển thị hướng dẫn sử dụng
+    """
+    update.message.reply_text(help_text, parse_mode="Markdown")
 
 '''
 def outfile_cmd(update: Update, context):
@@ -192,7 +228,8 @@ if __name__ == '__main__':
     #dp.add_handler(CommandHandler('outfile', outfile_cmd))
     dp.add_handler(CommandHandler("harvest", harvest_command))
     dp.add_handler(CommandHandler("source", show_sources))
-
+    dp.add_handler(CommandHandler("help", show_help))
+    dp.add_handler(CommandHandler("ioc", tweetfeed))
 
     updater.start_polling()
     updater.idle()
