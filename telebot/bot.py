@@ -8,6 +8,7 @@ from flask import Flask
 from telegram import InputFile
 import random
 from io import BytesIO
+from datetime import datetime
 
 
 
@@ -17,6 +18,7 @@ TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CRAWLER_API = os.getenv("CRAWLER_API", "http://crawler:5000")
 THEHARVESTER_API = os.getenv("THEHARVESTER_API", "http://theharvester_api:5100/query")
 TWEETFEED_API = os.getenv("TWEETFEED_API", "https://api.tweetfeed.live/v1/today")
+SOCIAL_API = os.getenv("SOCIAL_API", "http://social_scraper:5200/social")
 
 DEFAULT_SOURCES = (
     "api_endpoints,baidu,,builtwith,brave,censys,"
@@ -181,6 +183,58 @@ def tweetfeed(update: Update, context: CallbackContext):
     except Exception as e:
         update.message.reply_text(f"Lỗi: {str(e)}")
      
+def social_search(update: Update, context: CallbackContext):
+    query = ' '.join(context.args)
+    if not query:
+        update.message.reply_text("Usage: /social <query>")
+        return
+
+    update.message.reply_text(f"Searching social data for: {query} ...")
+
+    try:
+        r = requests.get(f"{SOCIAL_API}/social", params={"keyword": query, "limit": 20}, timeout=60)
+        if r.status_code == 200:
+            data = r.json()
+
+            if not data:
+                update.message.reply_text("No results found.")
+                return
+
+            formatted_results = []
+            for item in data:
+                source = item.get("source", "Unknown")
+                keyword = item.get("keyword", "")
+                content = item.get("content", "No Content")
+                url = item.get("url", "No URL")
+                ts = item.get("timestamp", None)
+
+                # parse timestamp ISO → format dễ đọc
+                if ts:
+                    try:
+                        ts_fmt = datetime.fromisoformat(ts).strftime("%Y-%m-%d %H:%M:%S")
+                    except Exception:
+                        ts_fmt = ts
+                else:
+                    ts_fmt = "No Time"
+
+                formatted_results.append(
+                    f"📌 Source: {source}\n"
+                    f"🔑 Keyword: {keyword}\n"
+                    f"📝 {content[:200]}...\n"
+                    f"🔗 [Open Link]({url})\n"
+                    f"⏰ {ts_fmt}"
+                )
+
+            # Ghép thành message và chia nhỏ nếu quá dài
+            output = "\n\n".join(formatted_results)
+            for chunk in [output[i:i+3500] for i in range(0, len(output), 3500)]:
+                update.message.reply_text(chunk, parse_mode="Markdown")
+
+        else:
+            update.message.reply_text(f"Search error: {r.status_code}")
+    except Exception as e:
+        update.message.reply_text(f"Error during search: {e}")
+
 
 def show_help(update: Update, context: CallbackContext):
     """Hiển thị hướng dẫn sử dụng bot."""
@@ -242,6 +296,7 @@ if __name__ == '__main__':
     dp.add_handler(CommandHandler("source", show_sources))
     dp.add_handler(CommandHandler("help", show_help))
     dp.add_handler(CommandHandler("ioc", tweetfeed))
+    dp.add_handler(CommandHandler("social", social_search))
 
     updater.start_polling()
     updater.idle()
