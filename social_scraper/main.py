@@ -23,9 +23,11 @@ def load_api_key(path="/app/api-keys.yaml"):
         config = yaml.safe_load(f)
     return config.get("apikeys", {}).get("rapidapi", {}).get("key")
 
-print(f"[DEBUG] Loaded RapidAPI key: {RAPIDAPI_KEY}")
+
 
 RAPIDAPI_KEY = load_api_key()
+
+print(f"[DEBUG] Loaded RapidAPI key: {RAPIDAPI_KEY}")
 
 '''
 HEADERS_BASE = {
