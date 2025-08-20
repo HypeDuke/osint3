@@ -21,7 +21,9 @@ def load_api_key(path="/app/api-keys.yaml"):
         raise FileNotFoundError(f"API key file not found: {path}")
     with open(path, "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
-    return config.get("rapidapi", {}).get("key")
+    return config.get("apikeys", {}).get("rapidapi", {}).get("key")
+
+print(f"[DEBUG] Loaded RapidAPI key: {RAPIDAPI_KEY}")
 
 RAPIDAPI_KEY = load_api_key()
 
