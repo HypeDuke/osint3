@@ -2,3 +2,5 @@ requests
 elasticsearch
 schedule
 python-dotenv
+flask
+PyYAML
