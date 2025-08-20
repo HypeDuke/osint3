@@ -1,5 +1,5 @@
 requests
-elasticsearch
+elasticsearch==8.11.0
 schedule
 python-dotenv
 flask
