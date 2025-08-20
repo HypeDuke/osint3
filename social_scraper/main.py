@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from flask import Flask, request, jsonify
 import yaml
 import threading
+import headers
 
 # Load biến môi trường
 load_dotenv()
@@ -23,9 +24,12 @@ def load_api_key(path="/app/api-keys.yaml"):
     return config.get("rapidapi", {}).get("key")
 
 RAPIDAPI_KEY = load_api_key()
+
+'''
 HEADERS_BASE = {
     "x-rapidapi-key": RAPIDAPI_KEY
 }
+'''
 
 # ----- Cấu hình API -----
 APIS = {
@@ -81,8 +85,11 @@ def extract_content(api_name, data):
 
 # ----- Fetch & Store -----
 def fetch_and_store(api_name, api_data, keyword):
-    headers = dict(HEADERS_BASE)
-    headers["x-rapidapi-host"] = api_data["host"]
+    #headers = dict(HEADERS_BASE)
+    headers = {
+        "x-rapidapi-host": api_data["host"],
+        "x-rapidapi-key": RAPIDAPI_KEY,
+    }
 
     url = api_data["base_url"].format(query=keyword)
 
