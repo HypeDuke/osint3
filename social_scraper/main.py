@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from flask import Flask, request, jsonify
 import yaml
 import threading
-import headers
+
 
 # Load biến môi trường
 load_dotenv()
@@ -94,9 +94,16 @@ def fetch_and_store(api_name, api_data, keyword):
     url = api_data["base_url"].format(query=keyword)
 
     try:
-        r = requests.get(url, headers=headers, timeout=30)
+        
+        print(f"\n[DEBUG] Fetching from {api_name}")
+        print(f"[DEBUG] URL: {url}")
+        print(f"[DEBUG] Headers: {headers}")
+
+        r = requests.get(url, headers=headers, timeout=60)
         r.raise_for_status()
         data = r.json()
+        print(data)
+
 
         extracted = extract_content(api_name, data)
 
