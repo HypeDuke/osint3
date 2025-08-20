@@ -8,7 +8,7 @@ from flask import Flask
 from telegram import InputFile
 import random
 from io import BytesIO
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 
 
@@ -150,10 +150,14 @@ def show_sources(update: Update, context: CallbackContext):
     formatted_sources = "\n".join(f"- {source.strip()}" for source in sources)
     update.message.reply_text(f"**Danh sách nguồn dữ liệu:**\n{formatted_sources}", parse_mode="Markdown")     
 
+def split_message(text, chunk_size=4000):
+    """Chia nhỏ message để tránh vượt giới hạn 4096 ký tự."""
+    return [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
+
 def tweetfeed(update: Update, context: CallbackContext):
     """Lấy danh sách IOCs từ TweetFeed API."""
     try:
-        response = requests.get(TWEETFEED_API, timeout=30)
+        response = requests.get(TWEETFEED_API, timeout=60)
         if response.status_code == 200:
             data = response.json()
             if not data:
@@ -173,11 +177,16 @@ def tweetfeed(update: Update, context: CallbackContext):
                     f"📅 {date}\n👤 {user}\n🔍 {ioc_type}: `{value}`\n🏷 {tags}\n🔗 {tweet_url}"
                 )
 
-            update.message.reply_text(
-                "**Danh sách IOCs hôm nay:**\n\n" + "\n\n".join(formatted_iocs),
-                parse_mode="Markdown",
-                disable_web_page_preview=True
-            )
+            full_message = "**Danh sách IOCs hôm nay:**\n\n" + "\n\n".join(formatted_iocs)
+
+            # Chia nhỏ và gửi từng phần
+            for chunk in split_message(full_message):
+                update.message.reply_text(
+                    chunk,
+                    parse_mode="Markdown",
+                    disable_web_page_preview=True
+                )
+                
         else:
             update.message.reply_text(f"Lỗi khi lấy dữ liệu: {response.status_code}")
     except Exception as e:
@@ -209,9 +218,15 @@ def social_search(update: Update, context: CallbackContext):
 
                 if ts:
                     try:
-                        ts_fmt = datetime.fromisoformat(ts).strftime("%Y-%m-%d %H:%M:%S")
+                        ts_int = int(ts)
+                        if ts_int > 1e12:  # Nếu API trả về mili giây thì chia 1000
+                            ts_int = ts_int / 1000
+
+                        dt_utc = datetime.utcfromtimestamp(ts_int).replace(tzinfo=timezone.utc)
+                        dt_vn = dt_utc.astimezone(timezone(timedelta(hours=7)))
+                        ts_fmt = dt_vn.strftime("%Y-%m-%d %H:%M:%S")
                     except Exception:
-                        ts_fmt = ts
+                        ts_fmt = str(ts)
                 else:
                     ts_fmt = "No Time"
 
@@ -242,6 +257,7 @@ def show_help(update: Update, context: CallbackContext):
     /ioc - Danh sách IOCs hàng ngày
     /harvest <domain> -s <source> -l <limit> - Thu thập thông tin từ các nguồn osint
     /source - Hiển thị danh sách các nguồn dữ liệu
+    /social - Tìm kiếm thông tin từ mạng xã hội
     /help - Hiển thị hướng dẫn sử dụng
     """
     update.message.reply_text(help_text, parse_mode="Markdown")

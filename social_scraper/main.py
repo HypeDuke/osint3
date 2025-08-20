@@ -27,7 +27,7 @@ def load_api_key(path="/app/api-keys.yaml"):
 
 RAPIDAPI_KEY = load_api_key()
 
-print(f"[DEBUG] Loaded RapidAPI key: {RAPIDAPI_KEY}")
+#print(f"[DEBUG] Loaded RapidAPI key: {RAPIDAPI_KEY}")
 
 '''
 HEADERS_BASE = {
@@ -98,15 +98,16 @@ def fetch_and_store(api_name, api_data, keyword):
     url = api_data["base_url"].format(query=keyword)
 
     try:
-        
+        '''
         print(f"\n[DEBUG] Fetching from {api_name}")
         print(f"[DEBUG] URL: {url}")
         print(f"[DEBUG] Headers: {headers}")
+        '''
 
         r = requests.get(url, headers=headers, timeout=60)
         r.raise_for_status()
         data = r.json()
-        print(data)
+        #print(data)
 
 
         extracted = extract_content(api_name, data)
@@ -120,7 +121,7 @@ def fetch_and_store(api_name, api_data, keyword):
                 "url": record.get("url"),
                 "content": record.get("content")
             }
-            es.index(index="social_data", document=doc)
+            es.index(index="social_data",id=doc["id"], document=doc)
 
         print(f"[+] Stored {len(extracted)} records from {api_name} ({keyword})")
     except Exception as e:
