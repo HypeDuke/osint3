@@ -184,15 +184,14 @@ def tweetfeed(update: Update, context: CallbackContext):
         update.message.reply_text(f"Lỗi: {str(e)}")
      
 def social_search(update: Update, context: CallbackContext):
-    query = ' '.join(context.args)
-    if not query:
-        update.message.reply_text("Usage: /social <query>")
-        return
+    limit = 20
+    if context.args and context.args[0].isdigit():
+        limit = int(context.args[0])
 
-    update.message.reply_text(f"Searching social data for: {query} ...")
+    update.message.reply_text(f"📡 Fetching latest {limit} social records ...")
 
     try:
-        r = requests.get(f"{SOCIAL_API}/social", params={"keyword": query, "limit": 20}, timeout=60)
+        r = requests.get(f"{SOCIAL_API}/social", params={"limit": limit}, timeout=60)
         if r.status_code == 200:
             data = r.json()
 
@@ -206,9 +205,8 @@ def social_search(update: Update, context: CallbackContext):
                 keyword = item.get("keyword", "")
                 content = item.get("content", "No Content")
                 url = item.get("url", "No URL")
-                ts = item.get("timestamp", None)
+                ts = item.get("timestamp")
 
-                # parse timestamp ISO → format dễ đọc
                 if ts:
                     try:
                         ts_fmt = datetime.fromisoformat(ts).strftime("%Y-%m-%d %H:%M:%S")
@@ -225,7 +223,6 @@ def social_search(update: Update, context: CallbackContext):
                     f"⏰ {ts_fmt}"
                 )
 
-            # Ghép thành message và chia nhỏ nếu quá dài
             output = "\n\n".join(formatted_results)
             for chunk in [output[i:i+3500] for i in range(0, len(output), 3500)]:
                 update.message.reply_text(chunk, parse_mode="Markdown")

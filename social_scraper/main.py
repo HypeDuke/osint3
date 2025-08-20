@@ -130,23 +130,13 @@ app = Flask(__name__)
 
 @app.route("/social", methods=["GET"])
 def search_social():
-    keyword = request.args.get("keyword", "")
     limit = int(request.args.get("limit", 10))
-
-    if not keyword:
-        return jsonify({"error": "Missing keyword"}), 400
 
     try:
         body = {
-            "query": {
-                "wildcard": {
-                    "content": {   
-                        "value": f"*{keyword}*",
-                        "case_insensitive": True
-                    }
-                }
-            },
-            "size": limit
+            "query": {"match_all": {}},   # lấy tất cả
+            "size": limit,
+            "sort": [{"timestamp": {"order": "desc"}}]  # sắp xếp mới nhất trước
         }
         resp = es.search(index="social_data", body=body)
         hits = resp.get("hits", {}).get("hits", [])
