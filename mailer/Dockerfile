@@ -9,6 +9,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy mailer code
 COPY mailer.py .
+COPY test_mail.py .
 
 # Expose nothing (this is background worker)
 # EXPOSE not needed
