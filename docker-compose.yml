@@ -56,6 +56,14 @@ services:
     depends_on:
       - elasticsearch
 
+  mailer:
+    build: ./mailer
+    container_name: mailer
+    depends_on:
+      - elasticsearch
+    env_file:
+      - ./mailer/.env   # credentials stored here
+    restart: unless-stopped
 
 volumes:
   esdata:
