@@ -55,7 +55,7 @@ def check_new_data():
             index=INDEX,
             body={
                 "query": {"match_all": {}},
-                "sort": [{"@timestamp": {"order": "desc"}}],
+                "sort": [{"indexed_at": {"order": "desc"}}],
                 "size": 20
             }
         )
@@ -65,21 +65,22 @@ def check_new_data():
             doc_id = h["_id"]
             src = h["_source"]
 
-            url = (src.get("url") or "").lower()
-            content = (src.get("content") or "").lower()
+            text = f"{src.get('line', '')} {src.get('path', '')}".lower()
+
+           
 
             # Only alert on new docs containing keywords
-            if doc_id not in seen_ids and any(kw in url or kw in content for kw in ALERT_KEYWORDS):
+            if doc_id not in seen_ids and any(kw in text for kw in ALERT_KEYWORDS):
                 seen_ids.add(doc_id)
 
-                subject = f"🚨 Leak Alert - {src.get('source', 'Unknown')}"
+                subject = f"🚨 Leak Alert - {src.get('path', 'Unknown')}"
                 body = f"""
-New possible leaked data detected in Elasticsearch:
+                New possible leaked data detected in Elasticsearch:
 
-🔑 Keyword: {src.get('keyword', 'N/A')}
-📝 Content: {src.get('content', 'N/A')}
-🔗 URL: {src.get('url', 'N/A')}
-⏰ Timestamp: {src.get('timestamp', 'N/A')}
+                🔑 Keyword match
+                📝 Line: {src.get('line', 'N/A')}
+                📂 File: {src.get('abs_path', 'N/A')}
+                ⏰ Indexed At: {src.get('indexed_at', 'N/A')}
                 """
                 send_mail(subject, body.strip())
     except Exception as e:
