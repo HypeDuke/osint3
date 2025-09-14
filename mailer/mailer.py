@@ -40,48 +40,22 @@ URL_RE = re.compile(r'(https?://[^\s,;]+)', re.IGNORECASE)
 def parse_leak_line(line: str):
     """
     Parse leaked line into (url, user, pass).
-    Only supports format:
-      https://...:user:pass
-      https://...:user
-    If invalid, return (None, None, None).
+    Supports:
+      https://host/path:user:pass
+      https://host/path:user
     """
     line = line.strip()
     if not line.lower().startswith("http"):
         return (None, None, None)
 
-    parts = line.split(":")
-    if len(parts) >= 4:
-        # ví dụ: https://host/path:User:Pass
-        url = ":".join(parts[:3])  # giữ lại schema + host + path
-        user = parts[3]
-        passwd = parts[4] if len(parts) > 4 else ""
+    # Regex: URL + optional user + optional pass
+    m = re.match(r"^(https?://[^\s:]+(?::\d+)?[^\s]*?)(?::([^:]+))?(?::([^:]+))?$", line)
+    if m:
+        url = m.group(1)
+        user = m.group(2) or ""
+        passwd = m.group(3) or ""
         return (url, user, passwd)
-
-    elif len(parts) == 3:
-        # ví dụ: https://host/path:User
-        url = ":".join(parts[:2])
-        user = parts[2]
-        return (url, user, "")
-
-    else:
-        return (line, "", "")
-
-
-def send_mail_html(subject, html_body):
-    """Send email with HTML body using Gmail SMTP (SSL)."""
-    msg = MIMEText(html_body, "html", "utf-8")
-    msg["Subject"] = subject
-    msg["From"] = FROM_EMAIL
-    msg["To"] = ", ".join(TO_EMAILS)
-
-    try:
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=30) as server:
-            server.login(FROM_EMAIL, FROM_PASS)
-            server.sendmail(FROM_EMAIL, TO_EMAILS, msg.as_string())
-        print(f"[+] Mail sent to {', '.join(TO_EMAILS)}")
-    except Exception as e:
-        print(f"[!] Error sending mail: {e}")
-
+    return (line, "", "")
 
 def build_html_table(rows):
     """rows is list of dicts with keys: path, keyword, content, url, user, pass, indexed_at"""
