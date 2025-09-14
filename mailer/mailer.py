@@ -5,7 +5,7 @@ from email.mime.text import MIMEText
 from elasticsearch import Elasticsearch
 from dotenv import load_dotenv
 
-# Load environment variables
+# Load environment variables from .env
 load_dotenv()
 
 ES_HOST = os.getenv("ES_HOST", "http://elasticsearch:9200")
@@ -25,15 +25,28 @@ def load_keywords(file_path="keywords.txt"):
 
 ALERT_KEYWORDS = load_keywords("keywords.txt")
 
+print(f"[*] Starting Mailer")
+print(f"[*] ES_HOST={ES_HOST}, INDEX={INDEX}")
+print(f"[*] FROM_EMAIL={FROM_EMAIL}, TO_EMAILS={TO_EMAILS}")
+print(f"[*] ALERT_KEYWORDS={ALERT_KEYWORDS}")
+
 # Connect to Elasticsearch
-es = Elasticsearch(ES_HOST)
+try:
+    es = Elasticsearch(ES_HOST)
+    if es.ping():
+        print("[+] Connected to Elasticsearch")
+    else:
+        print("[!] Cannot ping Elasticsearch")
+except Exception as e:
+    print(f"[!] Error connecting to ES: {e}")
+    es = None
 
 # Track already alerted docs
 seen_ids = set()
 
-
 def send_mail(subject, body):
     """Send email using Gmail SMTP."""
+    print(f"[*] Preparing to send email: {subject}")
     msg = MIMEText(body, "plain", "utf-8")
     msg["Subject"] = subject
     msg["From"] = FROM_EMAIL
@@ -47,47 +60,58 @@ def send_mail(subject, body):
     except Exception as e:
         print(f"[!] Error sending mail: {e}")
 
-
 def check_new_data():
     """Check ES for new docs and send alerts if keywords found."""
+    if not es:
+        print("[!] ES client not initialized, skipping check.")
+        return
+
     try:
+        print("[*] Querying Elasticsearch...")
         resp = es.search(
             index=INDEX,
             body={
                 "query": {"match_all": {}},
-                "sort": [{"indexed_at": {"order": "desc"}}],  # <-- match crawler field
+                "sort": [{"indexed_at": {"order": "desc"}}],
                 "size": 20
             }
         )
 
         hits = resp.get("hits", {}).get("hits", [])
+        print(f"[*] Got {len(hits)} docs from ES")
+
         for h in hits:
             doc_id = h["_id"]
             src = h["_source"]
 
             line = (src.get("line") or "").lower()
+            url = (src.get("url") or "").lower()
+            content = (src.get("content") or "").lower()
 
-            # Only alert on new docs containing keywords
-            if doc_id not in seen_ids and any(kw in line for kw in ALERT_KEYWORDS):
+            print(f"    [-] Checking doc {doc_id} with line='{line[:50]}'...")
+
+            if doc_id not in seen_ids and any(kw in line or kw in url or kw in content for kw in ALERT_KEYWORDS):
                 seen_ids.add(doc_id)
 
-                subject = f"🚨 Leak Alert - {src.get('path', 'Unknown file')}"
+                subject = f"🚨 Leak Alert - {src.get('path', 'Unknown')}"
                 body = f"""
 New possible leaked data detected in Elasticsearch:
 
-📄 File: {src.get('path')}
-📍 Absolute Path: {src.get('abs_path')}
-🔢 Line No: {src.get('lineno')}
-📝 Line Content: {src.get('line')}
-⏰ Indexed At: {src.get('indexed_at')}
+📄 Path: {src.get('path', 'N/A')}
+🔑 Keyword matched: {','.join([kw for kw in ALERT_KEYWORDS if kw in line or kw in url or kw in content])}
+📝 Line: {src.get('line', 'N/A')}
+🔗 URL: {src.get('url', 'N/A')}
+⏰ Indexed at: {src.get('indexed_at', 'N/A')}
                 """
                 send_mail(subject, body.strip())
+            else:
+                print(f"    [-] No keyword match or already seen.")
+
     except Exception as e:
         print(f"[!] Error querying ES: {e}")
-
 
 if __name__ == "__main__":
     print("[*] Mailer service started, watching for new OSINT data...")
     while True:
         check_new_data()
-        time.sleep(60)  # check every 1 minute
+        time.sleep(30)  # check every 30 seconds
