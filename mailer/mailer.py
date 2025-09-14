@@ -5,7 +5,7 @@ from email.mime.text import MIMEText
 from elasticsearch import Elasticsearch
 from dotenv import load_dotenv
 
-# Load environment variables from .env
+# Load environment variables
 load_dotenv()
 
 ES_HOST = os.getenv("ES_HOST", "http://elasticsearch:9200")
@@ -55,7 +55,7 @@ def check_new_data():
             index=INDEX,
             body={
                 "query": {"match_all": {}},
-                "sort": [{"indexed_at": {"order": "desc"}}],
+                "sort": [{"indexed_at": {"order": "desc"}}],  # <-- match crawler field
                 "size": 20
             }
         )
@@ -65,22 +65,21 @@ def check_new_data():
             doc_id = h["_id"]
             src = h["_source"]
 
-            text = f"{src.get('line', '')} {src.get('path', '')}".lower()
-
-           
+            line = (src.get("line") or "").lower()
 
             # Only alert on new docs containing keywords
-            if doc_id not in seen_ids and any(kw in text for kw in ALERT_KEYWORDS):
+            if doc_id not in seen_ids and any(kw in line for kw in ALERT_KEYWORDS):
                 seen_ids.add(doc_id)
 
-                subject = f"🚨 Leak Alert - {src.get('path', 'Unknown')}"
+                subject = f"🚨 Leak Alert - {src.get('path', 'Unknown file')}"
                 body = f"""
-                New possible leaked data detected in Elasticsearch:
+New possible leaked data detected in Elasticsearch:
 
-                🔑 Keyword match
-                📝 Line: {src.get('line', 'N/A')}
-                📂 File: {src.get('abs_path', 'N/A')}
-                ⏰ Indexed At: {src.get('indexed_at', 'N/A')}
+📄 File: {src.get('path')}
+📍 Absolute Path: {src.get('abs_path')}
+🔢 Line No: {src.get('lineno')}
+📝 Line Content: {src.get('line')}
+⏰ Indexed At: {src.get('indexed_at')}
                 """
                 send_mail(subject, body.strip())
     except Exception as e:
