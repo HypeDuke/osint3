@@ -64,6 +64,8 @@ services:
     env_file:
       - ./mailer/.env   # credentials stored here
     restart: unless-stopped
+    volumes:
+      - ./mailer/keywords.txt:/app/keywords.txt
 
 volumes:
   esdata:
