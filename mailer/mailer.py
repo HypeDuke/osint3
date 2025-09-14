@@ -37,60 +37,34 @@ seen_ids = set()
 # helper: parse a leak line into (link, user, pass)
 URL_RE = re.compile(r'(https?://[^\s,;]+)', re.IGNORECASE)
 
-def parse_leak_line(text: str):
+def parse_leak_line(line: str):
     """
-    Try to extract link, user, pass from the given text.
-    Returns tuple (link, user, password) where each can be None.
-    Heuristics:
-      - If there's an URL, take it as link. If URL is followed by :token1:token2 style, treat token1/token2 as user/pass.
-      - Else, try to find pattern token1:token2 (and token lengths reasonable).
+    Parse leaked line into (url, user, pass).
+    Only supports format:
+      https://...:user:pass
+      https://...:user
+    If invalid, return (None, None, None).
     """
-    if not text:
+    line = line.strip()
+    if not line.lower().startswith("http"):
         return (None, None, None)
-    text = text.strip()
-    # find url
-    m = URL_RE.search(text)
-    if m:
-        link = m.group(1).rstrip('.,;')
-        # look for trailing :user:pass after the url in the original text
-        after = text[m.end():].lstrip()
-        # common patterns: :Bank:12345 or :user:pass
-        # remove leading punctuation/spaces
-        if after.startswith(':'):
-            parts = after.split(':')
-            # parts[0] == '' because string begins with ':'
-            parts = [p for p in parts if p != '']
-            if len(parts) >= 2:
-                user = parts[0]
-                passwd = parts[1]
-                return (link, user, passwd)
-            elif len(parts) == 1:
-                # maybe only one token after colon, treat as password
-                return (link, None, parts[0])
-        # also sometimes the url itself contains colon-separated fragments (e.g. https://...:bank:1234)
-        # try to parse tokens attached to the url text (no space)
-        tail = None
-        tail_match = re.search(r'(https?://[^\s,;]+(:[^:\s,;]+){1,2})', text)
-        if tail_match:
-            combined = tail_match.group(1)
-            # split by ':' from the end
-            if combined.count(':') >= 2:
-                # split into url, user, pass
-                parts = combined.split(':')
-                # reconstruct url up to "https://.../..." (first part may include scheme+host+path)
-                url_part = parts[0]
-                rest = parts[1:]
-                if len(rest) >= 2:
-                    return (url_part, rest[0], rest[1])
-        # fallback
-        return (link, None, None)
+
+    parts = line.split(":")
+    if len(parts) >= 4:
+        # ví dụ: https://host/path:User:Pass
+        url = ":".join(parts[:3])  # giữ lại schema + host + path
+        user = parts[3]
+        passwd = parts[4] if len(parts) > 4 else ""
+        return (url, user, passwd)
+
+    elif len(parts) == 3:
+        # ví dụ: https://host/path:User
+        url = ":".join(parts[:2])
+        user = parts[2]
+        return (url, user, "")
+
     else:
-        # no url -> try user:pass pattern
-        # find token:token with moderate lengths
-        pair = re.search(r'([A-Za-z0-9._%+-]{1,64}):([A-Za-z0-9._%+-@]{1,128})', text)
-        if pair:
-            return (None, pair.group(1), pair.group(2))
-    return (None, None, None)
+        return (line, "", "")
 
 
 def send_mail_html(subject, html_body):
