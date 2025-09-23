@@ -33,6 +33,20 @@ def load_keywords(file_path="keywords.txt"):
 
 ALERT_KEYWORDS = load_keywords("keywords.txt")
 
+def load_blacklist(filename="blacklist.txt"):
+    if not os.path.exists(filename):
+        return []
+    with open(filename, "r", encoding="utf-8") as f:
+        return [line.strip() for line in f if line.strip()]
+    
+BLACKLIST = load_blacklist("blacklist.txt")
+
+def is_blacklisted(result_line: str) -> bool:
+    """Check nếu 1 dòng kết quả nằm trong blacklist"""
+    for b in BLACKLIST:
+        if b in result_line:
+            return True
+    return False
 # Connect to Elasticsearch
 es = Elasticsearch(ES_HOST)
 
@@ -55,9 +69,9 @@ def parse_leak_line(line: str):
 
 def build_html_table(rows):
     table = [
-        "<table border='1' cellpadding='6' cellspacing='0' style='border-collapse:collapse'>",
+        "<table border='1' cellpadding='4' cellspacing='0' style='border-collapse:collapse'>",
         "<thead><tr>"
-        "<th>Path</th><th>Keyword matched</th><th>Link</th><th>User</th><th>Pass</th><th>Indexed At (UTC+7)</th>"
+        "<th>URL</th><th>User</th><th>Pass</th><th>Indexed At (UTC+7)</th>"
         "</tr></thead>",
         "<tbody>"
     ]
@@ -65,8 +79,6 @@ def build_html_table(rows):
         link_html = f"<a href='{r['url']}'>{r['url']}</a>" if r.get("url") else "N/A"
         table.append(
             "<tr>"
-            f"<td>{r.get('path','')}</td>"
-            f"<td>{r.get('keyword','')}</td>"
             f"<td>{link_html}</td>"
             f"<td>{r.get('user','')}</td>"
             f"<td>{r.get('pass','')}</td>"
@@ -121,6 +133,12 @@ def check_new_data():
             if doc_id in seen_ids:
                 continue
 
+            # Bỏ qua nếu line/url trùng blacklist
+            if is_blacklisted(line) or is_blacklisted(url_field):
+                print(f"[DEBUG] Skipping blacklisted doc {doc_id}")
+                seen_ids.add(doc_id)
+                continue
+
             keyword_matches = [kw for kw in ALERT_KEYWORDS if kw in line.lower() or kw in url_field.lower()]
             print(f"[DEBUG] Keyword matches for {doc_id}: {keyword_matches}")
 
@@ -136,14 +154,11 @@ def check_new_data():
             indexed_human = str(indexed_ts)
 
             new_rows.append({
-                "path": path,
-                "keyword": ",".join(keyword_matches),
-                "content": line,
                 "url": link,
                 "user": user,
                 "pass": passwd,
-                "indexed_at": indexed_human,
-                "doc_id": doc_id
+                "indexed_at": indexed_human
+               
             })
 
             seen_ids.add(doc_id)
@@ -161,7 +176,7 @@ if __name__ == "__main__":
     print("[*] Mailer service started, watching for new OSINT data...")
 
     # Force test mail on startup
-    send_mail_html("🚨 Test Mail", "<b>This is a test alert from Mailer service</b>")
+    #send_mail_html("🚨 Test Mail", "<b>This is a test alert from Mailer service</b>")
 
     while True:
         check_new_data()
