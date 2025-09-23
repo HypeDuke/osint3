@@ -16,6 +16,11 @@ FROM_EMAIL = os.getenv("FROM_EMAIL")
 FROM_PASS = os.getenv("FROM_PASS")
 TO_EMAILS = [e.strip() for e in os.getenv("TO_EMAIL", "").split(",") if e.strip()]
 
+print("[DEBUG] FROM_EMAIL:", FROM_EMAIL)
+print("[DEBUG] TO_EMAILS:", TO_EMAILS)
+print("[DEBUG] ES_HOST:", ES_HOST)
+print("[DEBUG] INDEX:", INDEX)
+
 # Load keywords from file
 def load_keywords(file_path="keywords.txt"):
     if not os.path.exists(file_path):
@@ -23,7 +28,7 @@ def load_keywords(file_path="keywords.txt"):
         return []
     with open(file_path, "r", encoding="utf-8") as f:
         kws = [line.strip().lower() for line in f if line.strip()]
-    print(f"[+] Loaded {len(kws)} keywords from {file_path}")
+    print(f"[+] Loaded {len(kws)} keywords from {file_path}: {kws}")
     return kws
 
 ALERT_KEYWORDS = load_keywords("keywords.txt")
@@ -35,20 +40,11 @@ es = Elasticsearch(ES_HOST)
 seen_ids = set()
 
 # helper: parse a leak line into (link, user, pass)
-URL_RE = re.compile(r'(https?://[^\s,;]+)', re.IGNORECASE)
-
 def parse_leak_line(line: str):
-    """
-    Parse leaked line into (url, user, pass).
-    Supports:
-      https://host/path:user:pass
-      https://host/path:user
-    """
     line = line.strip()
     if not line.lower().startswith("http"):
         return (None, None, None)
 
-    # Regex: URL + optional user + optional pass
     m = re.match(r"^(https?://[^\s:]+(?::\d+)?[^\s]*?)(?::([^:]+))?(?::([^:]+))?$", line)
     if m:
         url = m.group(1)
@@ -58,8 +54,6 @@ def parse_leak_line(line: str):
     return (line, "", "")
 
 def build_html_table(rows):
-    """rows is list of dicts with keys: path, keyword, content, url, user, pass, indexed_at"""
-    
     table = [
         "<table border='1' cellpadding='6' cellspacing='0' style='border-collapse:collapse'>",
         "<thead><tr>"
@@ -69,17 +63,14 @@ def build_html_table(rows):
     ]
     for r in rows:
         link_html = f"<a href='{r['url']}'>{r['url']}</a>" if r.get("url") else "N/A"
-        user = r.get("user") or ""
-        passwd = r.get("pass") or ""
-        indexed = r.get("indexed_at") or ""
         table.append(
             "<tr>"
             f"<td>{r.get('path','')}</td>"
             f"<td>{r.get('keyword','')}</td>"
             f"<td>{link_html}</td>"
-            f"<td>{user}</td>"
-            f"<td>{passwd}</td>"
-            f"<td>{indexed}</td>"
+            f"<td>{r.get('user','')}</td>"
+            f"<td>{r.get('pass','')}</td>"
+            f"<td>{r.get('indexed_at','')}</td>"
             "</tr>"
         )
     table.append("</tbody></table>")
@@ -96,6 +87,7 @@ def send_mail_html(subject, html_body):
     msg["To"] = ", ".join(TO_EMAILS)
 
     try:
+        print("[DEBUG] Connecting to Gmail SMTP...")
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
             server.login(FROM_EMAIL, FROM_PASS)
             server.sendmail(FROM_EMAIL, TO_EMAILS, msg.as_string())
@@ -103,11 +95,8 @@ def send_mail_html(subject, html_body):
     except Exception as e:
         print(f"[!] Error sending email: {e}")
 
-
 def check_new_data():
-    """Check ES for new docs and send one batched email if matches found."""
     try:
-        # fetch recent docs (size adjustable)
         resp = es.search(
             index=INDEX,
             body={
@@ -117,44 +106,34 @@ def check_new_data():
             }
         )
         hits = resp.get("hits", {}).get("hits", [])
+        print(f"[DEBUG] Retrieved {len(hits)} docs from ES")
+
         new_rows = []
         for h in hits:
             doc_id = h["_id"]
-            if doc_id in seen_ids:
-                continue
             src = h["_source"]
             line = (src.get("line") or src.get("content") or "").strip()
             url_field = src.get("url") or ""
             path = src.get("path") or ""
-            keyword_matches = []
-            # check keywords in line or url
-            for kw in ALERT_KEYWORDS:
-                if kw and (kw in line.lower() or kw in url_field.lower()):
-                    keyword_matches.append(kw)
+
+            print(f"[DEBUG] Checking doc {doc_id}: line={line}, url={url_field}")
+
+            if doc_id in seen_ids:
+                continue
+
+            keyword_matches = [kw for kw in ALERT_KEYWORDS if kw in line.lower() or kw in url_field.lower()]
+            print(f"[DEBUG] Keyword matches for {doc_id}: {keyword_matches}")
+
             if not keyword_matches:
-                # no keyword matched -> skip (but mark as seen so it won't be reprocessed)
                 seen_ids.add(doc_id)
                 continue
 
-            # parse line for link/user/pass
             link, user, passwd = parse_leak_line(line)
-            # if no link found but there is url field in _source, prefer that
             if not link and url_field:
                 link = url_field
 
-            # convert indexed_at (epoch) to readable UTC+7 if present
             indexed_ts = src.get("indexed_at") or src.get("timestamp") or ""
-            indexed_human = ""
-            try:
-                if isinstance(indexed_ts, (int, float)):
-                    # utcfromtimestamp then add 7 hours
-                    from datetime import datetime, timedelta
-                    dt = datetime.utcfromtimestamp(int(indexed_ts)) + timedelta(hours=7)
-                    indexed_human = dt.strftime("%Y-%m-%d %H:%M:%S")
-                else:
-                    indexed_human = str(indexed_ts)
-            except Exception:
-                indexed_human = str(indexed_ts)
+            indexed_human = str(indexed_ts)
 
             new_rows.append({
                 "path": path,
@@ -167,7 +146,6 @@ def check_new_data():
                 "doc_id": doc_id
             })
 
-            # mark as seen (so next run won't resend)
             seen_ids.add(doc_id)
 
         if new_rows:
@@ -179,10 +157,12 @@ def check_new_data():
     except Exception as e:
         print(f"[!] Error querying ES: {e}")
 
-
 if __name__ == "__main__":
     print("[*] Mailer service started, watching for new OSINT data...")
-    # simple loop, tune sleep interval as needed
+
+    # Force test mail on startup
+    send_mail_html("🚨 Test Mail", "<b>This is a test alert from Mailer service</b>")
+
     while True:
         check_new_data()
         time.sleep(60)
