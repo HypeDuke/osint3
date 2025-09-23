@@ -134,8 +134,8 @@ def check_new_data():
                 continue
 
             # Bỏ qua nếu line/url trùng blacklist
-            if is_blacklisted(line) or is_blacklisted(url_field):
-                print(f"[DEBUG] Skipping blacklisted doc {doc_id}")
+            if any(b.lower() in line.lower() or b.lower() in url_field.lower() for b in BLACKLIST):
+                print(f"[DEBUG] Doc {doc_id} bị loại vì trùng blacklist")
                 seen_ids.add(doc_id)
                 continue
 
