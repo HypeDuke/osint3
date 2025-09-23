@@ -85,6 +85,24 @@ def build_html_table(rows):
     table.append("</tbody></table>")
     return "\n".join(table)
 
+def send_mail_html(subject, html_body):
+    if not FROM_EMAIL or not FROM_PASS or not TO_EMAILS:
+        print("[!] Missing FROM_EMAIL, FROM_PASS or TO_EMAIL in environment")
+        return False
+    
+    msg = MIMEText(html_body, "html", "utf-8")
+    msg["Subject"] = subject
+    msg["From"] = FROM_EMAIL
+    msg["To"] = ", ".join(TO_EMAILS)
+
+    try:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(FROM_EMAIL, FROM_PASS)
+            server.sendmail(FROM_EMAIL, TO_EMAILS, msg.as_string())
+        print(f"[+] Alert email sent to {', '.join(TO_EMAILS)}")
+    except Exception as e:
+        print(f"[!] Error sending email: {e}")
+
 
 def check_new_data():
     """Check ES for new docs and send one batched email if matches found."""
@@ -153,7 +171,7 @@ def check_new_data():
             seen_ids.add(doc_id)
 
         if new_rows:
-            subject = f"🚨 OSINT Leak Batch Alert - {len(new_rows)} items"
+            subject = f"🚨 OSINT Leak Alert - {len(new_rows)} items"
             html = build_html_table(new_rows)
             send_mail_html(subject, html)
         else:
