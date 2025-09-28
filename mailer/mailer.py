@@ -5,6 +5,10 @@ import re
 from email.mime.text import MIMEText
 from elasticsearch import Elasticsearch
 from dotenv import load_dotenv
+import requests
+from bs4 import BeautifulSoup
+import schedule
+
 
 # Load environment variables from .env
 load_dotenv()
@@ -87,6 +91,70 @@ def build_html_table(rows):
         )
     table.append("</tbody></table>")
     return "\n".join(table)
+
+# Add subdomain fectcher
+def fetch_subdomains(domain):
+    url = f"https://viewdns.info/subdomains/?domain={domain}"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+        "Accept-Language": "en-US,en;q=0.9"
+    }
+    try:
+        resp = requests.get(url, headers=headers, timeout=30)
+        resp.raise_for_status()
+    except Exception as e:
+        print(f"[!] Error fetching subdomains: {e}")
+        return []
+
+    soup = BeautifulSoup(resp.text, "html.parser")
+    rows = soup.find_all("tr")
+
+    results = []
+    for row in rows:
+        cols = row.find_all("td")
+        if len(cols) >= 3:
+            subdomain = cols[0].get_text(strip=True)
+
+            ip_html = cols[1]
+            ips = [ip.strip() for ip in ip_html.stripped_strings if ip.strip()]
+            if not ips:
+                ips = ["No IP Address"]
+
+            date_html = cols[2]
+            dates = [d.strip() for d in date_html.stripped_strings if d.strip()]
+            if not dates:
+                dates = ["N/A"]
+
+            max_len = max(len(ips), len(dates))
+            for i in range(max_len):
+                ip = ips[i] if i < len(ips) else ips[-1]
+                date = dates[i] if i < len(dates) else dates[-1]
+                results.append([subdomain, ip, date])
+    return results
+
+def weekly_subdomain_task():
+    DOMAIN = os.getenv("TARGET_DOMAIN", "napas.com.vn")
+    print(f"[*] Running weekly subdomain fetch for {DOMAIN}...")
+    results = fetch_subdomains(DOMAIN)
+    if results:
+        html = build_subdomain_html(results, DOMAIN)
+        send_mail_html(f"🕵️ Weekly Subdomain Report for {DOMAIN}", html)
+    else:
+        print("[*] No subdomains found")
+
+
+def build_subdomain_html(rows, domain):
+    html = [
+        f"<h3>Weekly Subdomain Report for {domain}</h3>",
+        "<table border='1' cellpadding='4' cellspacing='0' style='border-collapse:collapse'>",
+        "<thead><tr><th>Subdomain</th><th>IP</th><th>Date</th></tr></thead>",
+        "<tbody>"
+    ]
+    for r in rows:
+        html.append(f"<tr><td>{r[0]}</td><td>{r[1]}</td><td>{r[2]}</td></tr>")
+    html.append("</tbody></table>")
+    return "\n".join(html)
+
 
 def send_mail_html(subject, html_body):
     if not FROM_EMAIL or not FROM_PASS or not TO_EMAILS:
@@ -174,10 +242,16 @@ def check_new_data():
 
 if __name__ == "__main__":
     print("[*] Mailer service started, watching for new OSINT data...")
-
+    
+    # Chạy ngay khi container start
+    weekly_subdomain_task()
     # Force test mail on startup
     #send_mail_html("🚨 Test Mail", "<b>This is a test alert from Mailer service</b>")
+     # Đặt lịch chạy mỗi thứ 2 lúc 09:00 sáng
+    schedule.every().monday.at("09:00").do(weekly_subdomain_task)
+
 
     while True:
         check_new_data()
+        schedule.run_pending() # kiểm tra xem có job subdomain nào đến hạn không
         time.sleep(60)
