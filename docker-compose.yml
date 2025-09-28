@@ -25,17 +25,6 @@ services:
     depends_on:
       - elasticsearch
 
-  telebot:
-    build: ./telebot
-    container_name: telebot
-    env_file:
-      - ./telebot/.env
-    environment:
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-    depends_on:
-      - crawler
-    restart: unless-stopped
-
   theharvester_api:
     build: ./theharvester_api
     container_name: theharvester_api
