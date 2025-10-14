@@ -55,6 +55,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./mailer/keywords.txt:/app/keywords.txt
+      - ./mailer/blacklist.txt:/app/blacklist.txt
 
 volumes:
   esdata:
