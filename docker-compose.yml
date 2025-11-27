@@ -57,6 +57,18 @@ services:
       - ./mailer/keywords.txt:/app/keywords.txt
       - ./mailer/blacklist.txt:/app/blacklist.txt
 
+
+  telegram_bot:
+    build: ./telegram_bot
+    container_name: telegram_bot
+    ports:
+      - "6000:6000"
+    env_file:
+      - ./telegram_bot/.env
+    restart: unless-stopped
+    depends_on:
+      - elasticsearch
+
 volumes:
   esdata:
   crawler_state:
