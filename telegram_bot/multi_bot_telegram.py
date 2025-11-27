@@ -165,6 +165,7 @@ class EmailTemplate:
     @staticmethod
     def minimal_batch_template(channel_name, messages):
         """Minimal batch template"""
+        formatted_text = msg['text'].replace('\n', '<br>')
         html = f"""
         <html>
         <body style="font-family: Arial, sans-serif; padding: 20px;">
@@ -178,7 +179,7 @@ class EmailTemplate:
             html += f"""
             <div style="background: #f9f9f9; padding: 15px; margin: 15px 0; border-left: 3px solid #333;">
                 <strong>#{idx}</strong> - <small>{msg['date']}</small><br><br>
-                {msg['text'].replace('\n', '<br>')}
+                {formatted_text}
             </div>
             """
         
@@ -191,6 +192,7 @@ class EmailTemplate:
     @staticmethod
     def detailed_batch_template(channel_name, messages):
         """Detailed batch template"""
+        formatted_text = msg['text'].replace('\n', '<br>')
         html = f"""
         <html>
         <head>
@@ -218,7 +220,7 @@ class EmailTemplate:
             <div class="message">
                 <div style="color:#667eea; font-weight:bold;">Message #{idx} (ID: {msg['id']})</div>
                 <div style="color:#666; font-size:13px; margin:5px 0;">{msg['date']}</div>
-                <div style="margin-top:10px;">{msg['text'].replace('\n', '<br>')}</div>
+                <div style="margin-top:10px;">{formatted_text}</div>
             </div>
             """
         
