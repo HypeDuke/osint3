@@ -305,21 +305,25 @@ class SearchAndListenMonitor:
     
     def send_email(self, to_email, subject, html_content):
         """Send email"""
+        if not EMAIL_FROM or not EMAIL_PASSWORD or not to_email:
+            print("[!] Missing EMAIL_FROM, EMAIL_PASSWORD or to_email in environment")
+            return False
+        
         try:
-            msg = MIMEMultipart('alternative')
-            msg['Subject'] = subject
-            msg['From'] = EMAIL_FROM
-            msg['To'] = to_email
+            # Parse multiple emails if comma-separated
+            to_emails = [email.strip() for email in to_email.split(',')]
             
-            html_part = MIMEText(html_content, 'html')
-            msg.attach(html_part)
+            msg = MIMEText(html_content, "html", "utf-8")
+            msg["Subject"] = subject
+            msg["From"] = EMAIL_FROM
+            msg["To"] = ", ".join(to_emails)
             
-            with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
-                server.starttls()
+            print("[DEBUG] Connecting to Gmail SMTP...")
+            with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
                 server.login(EMAIL_FROM, EMAIL_PASSWORD)
-                server.send_message(msg)
+                server.sendmail(EMAIL_FROM, to_emails, msg.as_string())
             
-            print(f"      ✅ Email sent to {to_email}")
+            print(f"      ✅ Email sent to {', '.join(to_emails)}")
             return True
         except Exception as e:
             print(f"      ❌ Email error: {e}")
