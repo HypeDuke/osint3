@@ -15,7 +15,7 @@ load_dotenv()
 # Telegram credentials
 API_ID = os.getenv('TELEGRAM_API_ID')
 API_HASH = os.getenv('TELEGRAM_API_HASH')
-BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+
 
 # Email credentials
 EMAIL_FROM = os.getenv('EMAIL_FROM')
@@ -299,14 +299,9 @@ class SearchAndListenMonitor:
     
     async def connect(self):
         """Connect to Telegram"""
-        if BOT_TOKEN:
-            await self.client.start(bot_token=BOT_TOKEN)
-            me = await self.client.get_me()
-            print(f"✅ Connected to Telegram as bot: {me.username}")
-        else:
-            await self.client.start()
-            me = await self.client.get_me()
-            print(f"✅ Connected to Telegram as {me.first_name}")
+        await self.client.start()
+        me = await self.client.get_me()
+        print(f"✅ Connected to Telegram as {me.first_name}")
     
     def send_email(self, to_email, subject, html_content):
         """Send email"""
