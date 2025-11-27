@@ -96,13 +96,15 @@ class EmailTemplate:
     @staticmethod
     def minimal_template(channel_name, message):
         """Minimal template for single message"""
+        
+        formatted_text = message['text'].replace('\n', '<br>')
         html = f"""
         <html>
         <body style="font-family: Arial, sans-serif; padding: 20px;">
             <h3>🔔 New Message: {channel_name}</h3>
             <p><small>{message['date']}</small></p>
             <div style="background: #f5f5f5; padding: 15px; border-left: 3px solid #333;">
-                {message['text'].replace('\n', '<br>')}
+                {formatted_text}
             </div>
         </body>
         </html>
@@ -112,6 +114,7 @@ class EmailTemplate:
     @staticmethod
     def detailed_template(channel_name, message):
         """Detailed template for single message"""
+        formatted_text = message['text'].replace('\n', '<br>')
         html = f"""
         <html>
         <head>
@@ -132,7 +135,7 @@ class EmailTemplate:
                 <div class="content">
                     <div class="message">
                         <small style="color:#666;">{message['date']} (ID: {message['id']})</small><br><br>
-                        {message['text'].replace('\n', '<br>')}
+                        {formatted_text}
                     </div>
                 </div>
             </div>
