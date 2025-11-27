@@ -7,8 +7,9 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy simple test script
-COPY simple_test.py .
+# Copy script
+COPY multi_bot_telegram.py .
+COPY channels.json .
 
 # Create directory for session files
 RUN mkdir -p /app/sessions /app/logs

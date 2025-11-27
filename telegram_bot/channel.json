@@ -1,0 +1,23 @@
+[
+  {
+    "name": "breachdetector",
+    "username": "@breachdetect",
+    "limit": 50,
+    "filter": {
+      "type": "contains",
+      "value": "napas"
+    },
+    "email_to": "ducdh@napas.com.vn",
+    "email_subject": "Data Leak Alert",
+    "template": "clean"
+  },
+  {
+    "name": "cvedetect",
+    "username": "@cvedetector",
+    "limit": 30,
+    "filter": null,
+    "email_to": "ducdh@napas.com.vn",
+    "email_subject": "CVE News",
+    "template": "clean"
+  }
+]
