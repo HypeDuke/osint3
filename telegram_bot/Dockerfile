@@ -12,7 +12,7 @@ COPY multi_bot_telegram.py .
 COPY channels.json .
 
 # Create directory for session files
-RUN mkdir -p /app/sessions /app/logs
+RUN mkdir -p /app/logs
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1

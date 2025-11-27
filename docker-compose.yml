@@ -68,6 +68,8 @@ services:
     restart: unless-stopped
     depends_on:
       - elasticsearch
+    volumes:
+      - ./sessions:/app/sessions 
 
 volumes:
   esdata:
