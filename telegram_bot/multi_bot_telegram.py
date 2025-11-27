@@ -22,8 +22,20 @@ EMAIL_PASSWORD = os.getenv('EMAIL_PASSWORD')
 SMTP_SERVER = os.getenv('SMTP_SERVER', 'smtp.gmail.com')
 SMTP_PORT = int(os.getenv('SMTP_PORT', '465'))
 
-# Channels configuration
-CHANNELS_CONFIG = json.loads(os.getenv('CHANNELS_CONFIG', '[]'))
+# Load channels configuration from JSON file
+def load_channels_config():
+    """Load channels configuration from channels.json"""
+    try:
+        with open('channels.json', 'r') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        print("❌ Error: channels.json not found!")
+        return []
+    except json.JSONDecodeError as e:
+        print(f"❌ Error parsing channels.json: {e}")
+        return []
+
+CHANNELS_CONFIG = load_channels_config()
 
 # State file
 STATE_FILE = 'sessions/monitor_state.pkl'
