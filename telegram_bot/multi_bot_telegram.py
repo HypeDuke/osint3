@@ -705,33 +705,48 @@ class SearchAndListenMonitor:
                 print(f"   ⏭️  Already searched, skipping initial search")
                 return channel_id
             
-            # Get search keyword
-            search_keyword = None
-            if filter_config and filter_config.get('type') in ['contains', 'regex']:
-                search_keyword = filter_config.get('value')
+             # Get search keywords
+            search_keywords = []
+            if filter_config and filter_config.get('type') in ['contains', 'contains_all']:
+                filter_value = filter_config.get('value')
+                if isinstance(filter_value, list):
+                    search_keywords = filter_value
+                elif isinstance(filter_value, str):
+                    search_keywords = [k.strip() for k in filter_value.split(',')]
             
             matched_messages = []
+            seen_message_ids = set()  # To avoid duplicates
             
-            if search_keyword:
-                print(f"   🔎 Searching for keyword: '{search_keyword}'")
+            if search_keywords:
+                print(f"   🔎 Searching for {len(search_keywords)} keywords")
                 print(f"   ⏳ This may take a while...")
                 
-                # Use Telegram's search function
-                async for message in self.client.iter_messages(
-                    entity, 
-                    limit=search_limit,
-                    search=search_keyword
-                ):
-                    if message.text:
-                        # Apply additional filter
-                        if BotFilter.apply_filter(message.text, filter_config):
-                            matched_messages.append({
-                                'date': message.date.strftime('%Y-%m-%d %H:%M:%S'),
-                                'text': message.text,
-                                'id': message.id
-                            })
+                # Search for each keyword separately
+                for idx, keyword in enumerate(search_keywords, 1):
+                    print(f"      [{idx}/{len(search_keywords)}] Searching: '{keyword}'...")
+                    
+                    try:
+                        async for message in self.client.iter_messages(
+                            entity, 
+                            limit=search_limit,
+                            search=keyword
+                        ):
+                            if message.text and message.id not in seen_message_ids:
+                                # Apply additional filter
+                                if BotFilter.apply_filter(message.text, filter_config):
+                                    matched_messages.append({
+                                        'date': message.date.strftime('%Y-%m-%d %H:%M:%S'),
+                                        'text': message.text,
+                                        'id': message.id
+                                    })
+                                    seen_message_ids.add(message.id)
+                    except Exception as e:
+                        print(f"      ⚠️  Error searching '{keyword}': {e}")
+                        continue
                 
-                print(f"   ✅ Found {len(matched_messages)} messages with keyword")
+                # Sort by date (newest first)
+                matched_messages.sort(key=lambda x: x['date'], reverse=True)
+                print(f"   ✅ Found {len(matched_messages)} unique messages")
             else:
                 print(f"   ℹ️  No search keyword, getting recent messages...")
                 messages = await self.client.get_messages(entity, limit=50)
@@ -748,19 +763,17 @@ class SearchAndListenMonitor:
             
             # Send batch email with results
             if matched_messages:
-                email_to = config.get('email_to')
-                if email_to:
-                    template = config.get('template', 'clean')
-                    email_subject = f"[Initial Search] {config.get('email_subject', channel_name)}"
-                    
-                    html_content = EmailTemplate.create_batch_email(
-                        channel_name, 
-                        matched_messages,
-                        template
-                    )
-                    
-                    print(f"   📧 Sending batch email with {len(matched_messages)} messages...")
-                    self.send_email(email_to, email_subject, html_content)
+                template = config.get('template', 'clean')
+                email_subject = f"[Initial Search] {config.get('email_subject', channel_name)}"
+                
+                html_content = EmailTemplate.create_batch_email(
+                    channel_name, 
+                    matched_messages,
+                    template
+                )
+                
+                print(f"   📧 Sending batch email with {len(matched_messages)} messages...")
+                self.send_email(email_subject, html_content)
             
             # Get latest message ID for listening
             latest_messages = await self.client.get_messages(entity, limit=1)
