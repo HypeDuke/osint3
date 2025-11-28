@@ -667,7 +667,7 @@ class SearchAndListenMonitor:
         
         try:
             # Parse multiple emails if comma-separated
-            to_emails = [email.strip() for email in to_email.split(',')]
+            to_emails = [email.strip() for email in EMAIL_TO.split(',')]
             
             msg = MIMEText(html_content, "html", "utf-8")
             msg["Subject"] = subject
