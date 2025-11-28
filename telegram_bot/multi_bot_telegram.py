@@ -83,54 +83,8 @@ class BotFilter:
         
         return True
 
-
-    @staticmethod
-    def parse_message_data(text):
-        """Parse structured data from message text"""
-        source = content = detection_date = None
-        parse_success = False
-        
-        if '"Source":' in text or '"source":' in text.lower():
-            import json
-            try:
-                # Try different extraction methods
-                # Method 1: Direct JSON parse
-                try:
-                    data = json.loads(text)
-                    source = data.get('Source', data.get('source', ''))
-                    content = data.get('Content', data.get('content', ''))
-                    detection_date = data.get('Detection Date', data.get('detection_date', ''))
-                    if source or content or detection_date:
-                        parse_success = True
-                except:
-                    # Method 2: Extract JSON part before ** markers
-                    json_part = text
-                    if '**' in text:
-                        json_part = text.split('**')[0].strip()
-                    elif '\n\n' in text:
-                        json_part = text.split('\n\n')[0].strip()
-                    
-                    # Method 3: Use regex to extract field by field (safer than parsing invalid JSON)
-                    import re
-                    
-                    source_match = re.search(r'"Source"\s*:\s*"([^"]+)"', json_part, re.IGNORECASE)
-                    if source_match:
-                        source = source_match.group(1)
-                    
-                    content_match = re.search(r'"Content"\s*:\s*"([^"]+)"', json_part, re.IGNORECASE)
-                    if content_match:
-                        content = content_match.group(1)
-                    
-                    date_match = re.search(r'"Detection Date"\s*:\s*"([^"]+)"', json_part, re.IGNORECASE)
-                    if date_match:
-                        detection_date = date_match.group(1)
-                    
-                    if source or content or detection_date:
-                        parse_success = True
-            except Exception as e:
-                pass
-        
-        return parse_success, source, content, detection_date
+    
+class EmailTemplate:
     """Email templates"""
     
     @staticmethod
@@ -280,11 +234,45 @@ class BotFilter:
     @staticmethod
     def clean_template(channel_name, message):
         """Clean template for single message"""
-        # Parse structured data
-        parse_success, source, content, detection_date = EmailTemplate.parse_message_data(message['text'])
+        # Parse structured data if present
+        text = message['text']
+        source = content = detection_date = None
+        
+        # Try to extract structured fields
+        if '"Source":' in text or '"source":' in text.lower():
+            import json
+            try:
+                # Try different extraction methods
+                # Method 1: Direct JSON parse
+                try:
+                    data = json.loads(text)
+                    source = data.get('Source', data.get('source', ''))
+                    content = data.get('Content', data.get('content', ''))
+                    detection_date = data.get('Detection Date', data.get('detection_date', ''))
+                except:
+                    # Method 2: Extract JSON part before ** markers or newlines
+                    json_part = text
+                    if '**' in text:
+                        json_part = text.split('**')[0].strip()
+                    elif '\n\n' in text:
+                        # Sometimes JSON is in first paragraph
+                        json_part = text.split('\n\n')[0].strip()
+                    
+                    # Try to find JSON object pattern
+                    import re
+                    json_match = re.search(r'\{[^}]+\}', json_part, re.DOTALL)
+                    if json_match:
+                        json_str = json_match.group(0)
+                        data = json.loads(json_str)
+                        source = data.get('Source', data.get('source', ''))
+                        content = data.get('Content', data.get('content', ''))
+                        detection_date = data.get('Detection Date', data.get('detection_date', ''))
+            except Exception as e:
+                print(f"   ⚠️  JSON parse error: {e}")
+                pass
         
         # If structured data found, use formal report template
-        if parse_success and (source or content or detection_date):
+        if source or content or detection_date:
             html = f"""
             <html>
             <head>
@@ -574,30 +562,36 @@ class BotFilter:
             """
             
             for idx, msg in enumerate(messages, 1):
-                # Parse structured data using new method
-                parse_success, source, content, detection_date = EmailTemplate.parse_message_data(msg['text'])
+                # Parse structured data
+                text = msg['text']
+                source = content = detection_date = None
                 
-                # If parsing failed or all fields empty, show raw text instead
-                if not parse_success or not (source or content or detection_date):
-                    # Show raw message in a different format
-                    formatted_text = msg['text'].replace('\n', '<br>')
-                    html += f"""
-                        <div class="alert-item">
-                            <div class="alert-header">
-                                <span class="alert-number">Alert #{idx}</span>
-                                <span style="float: right; color: #999; font-size: 12px;">ID: {msg['id']}</span>
-                            </div>
-                            <div class="alert-body">
-                                <div class="field">
-                                    <div class="field-label">Raw Message Content</div>
-                                    <div class="field-value">{formatted_text}</div>
-                                </div>
-                            </div>
-                        </div>
-                    """
-                else:
-                    # Show parsed structured data
-                    html += f"""
+                try:
+                    # Try different parsing methods
+                    try:
+                        data = json.loads(text)
+                        source = data.get('Source', data.get('source', 'N/A'))
+                        content = data.get('Content', data.get('content', 'N/A'))
+                        detection_date = data.get('Detection Date', data.get('detection_date', 'N/A'))
+                    except:
+                        json_part = text
+                        if '**' in text:
+                            json_part = text.split('**')[0].strip()
+                        elif '\n\n' in text:
+                            json_part = text.split('\n\n')[0].strip()
+                        
+                        import re
+                        json_match = re.search(r'\{[^}]+\}', json_part, re.DOTALL)
+                        if json_match:
+                            json_str = json_match.group(0)
+                            data = json.loads(json_str)
+                            source = data.get('Source', data.get('source', 'N/A'))
+                            content = data.get('Content', data.get('content', 'N/A'))
+                            detection_date = data.get('Detection Date', data.get('detection_date', 'N/A'))
+                except:
+                    source = content = detection_date = 'N/A'
+                
+                html += f"""
                         <div class="alert-item">
                             <div class="alert-header">
                                 <span class="alert-number">Alert #{idx}</span>
@@ -606,19 +600,19 @@ class BotFilter:
                             <div class="alert-body">
                                 <div class="field">
                                     <div class="field-label">Source</div>
-                                    <div class="field-value">{source if source else 'N/A'}</div>
+                                    <div class="field-value">{source}</div>
                                 </div>
                                 <div class="field">
                                     <div class="field-label">Content Description</div>
-                                    <div class="field-value">{content if content else 'N/A'}</div>
+                                    <div class="field-value">{content}</div>
                                 </div>
                                 <div class="field">
                                     <div class="field-label">Detection Date</div>
-                                    <div class="field-value">{detection_date if detection_date else 'N/A'}</div>
+                                    <div class="field-value">{detection_date}</div>
                                 </div>
                             </div>
                         </div>
-                    """
+                """
             
             html += f"""
                     </div>
