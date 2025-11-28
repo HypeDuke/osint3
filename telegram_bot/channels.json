@@ -5,7 +5,7 @@
     "limit": 50,
     "filter": {
       "type": "contains",
-      "value": ["napas", "visa", "mastercard", "vietnam bank", "vietnam id", "vietnam info", "vietnam citizen", "vietcombank", "agribank", "bidv", "techcombank", "mbbank", "vietinbank"]
+      "value": ["napas", "vietnam bank", "vietnam id", "vietnam info", "vietnam citizen", "vietcombank", "agribank", "bidv", "techcombank", "mbbank", "vietinbank"]
     },
     "email_subject": "Data Leak Alert",
     "template": "clean"
@@ -19,6 +19,6 @@
       "value": ["microsoft teams", "7-zip", "7zip", "vietnam bank", "apache", "nginx", "cisco", "fortinet", "paloalto", "vmware"]
     },
     "email_subject": "CVE News",
-    "template": "clean"
+    "template": "detailed"
   }
 ]
