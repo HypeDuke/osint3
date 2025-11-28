@@ -659,10 +659,11 @@ class SearchAndListenMonitor:
         me = await self.client.get_me()
         print(f"✅ Connected to Telegram as {me.first_name}")
     
-    def send_email(self, to_email, subject, html_content):
+    def send_email(self, subject, html_content):
+        
         """Send email"""
-        if not EMAIL_FROM or not EMAIL_PASSWORD or not to_email:
-            print("[!] Missing EMAIL_FROM, EMAIL_PASSWORD or to_email in environment")
+        if not EMAIL_FROM or not EMAIL_PASSWORD or not EMAIL_TO:
+            print("[!] Missing EMAIL_FROM, EMAIL_PASSWORD or EMAIL_TO in environment")
             return False
         
         try:
