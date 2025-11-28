@@ -58,7 +58,7 @@ class BotFilter:
         if not filter_value:
             return True
         
-         # Support multiple keywords (list or comma-separated string)
+        # Support multiple keywords (list or comma-separated string)
         keywords = []
         if isinstance(filter_value, list):
             keywords = filter_value
@@ -230,27 +230,45 @@ class EmailTemplate:
             </html>
             """
         return html
-
     
     @staticmethod
     def clean_template(channel_name, message):
-        
         """Clean template for single message"""
         # Parse structured data if present
         text = message['text']
         source = content = detection_date = None
         
         # Try to extract structured fields
-        if '"Source":' in text:
+        if '"Source":' in text or '"source":' in text.lower():
             import json
             try:
-                # Extract JSON part (before the ** markers)
-                json_part = text.split('**')[0].strip()
-                data = json.loads(json_part)
-                source = data.get('Source', '')
-                content = data.get('Content', '')
-                detection_date = data.get('Detection Date', '')
-            except:
+                # Try different extraction methods
+                # Method 1: Direct JSON parse
+                try:
+                    data = json.loads(text)
+                    source = data.get('Source', data.get('source', ''))
+                    content = data.get('Content', data.get('content', ''))
+                    detection_date = data.get('Detection Date', data.get('detection_date', ''))
+                except:
+                    # Method 2: Extract JSON part before ** markers or newlines
+                    json_part = text
+                    if '**' in text:
+                        json_part = text.split('**')[0].strip()
+                    elif '\n\n' in text:
+                        # Sometimes JSON is in first paragraph
+                        json_part = text.split('\n\n')[0].strip()
+                    
+                    # Try to find JSON object pattern
+                    import re
+                    json_match = re.search(r'\{[^}]+\}', json_part, re.DOTALL)
+                    if json_match:
+                        json_str = json_match.group(0)
+                        data = json.loads(json_str)
+                        source = data.get('Source', data.get('source', ''))
+                        content = data.get('Content', data.get('content', ''))
+                        detection_date = data.get('Detection Date', data.get('detection_date', ''))
+            except Exception as e:
+                print(f"   ⚠️  JSON parse error: {e}")
                 pass
         
         # If structured data found, use formal report template
@@ -320,7 +338,6 @@ class EmailTemplate:
     @staticmethod
     def minimal_batch_template(channel_name, messages):
         """Minimal batch template"""
-        formated_text = msg['text'].replace('\n', '<br>')
         html = f"""
         <html>
         <body style="font-family: Arial, sans-serif; padding: 20px;">
@@ -331,6 +348,7 @@ class EmailTemplate:
         """
         
         for idx, msg in enumerate(messages, 1):
+            formated_text = msg['text'].replace('\n', '<br>')
             html += f"""
             <div style="background: #f9f9f9; padding: 15px; margin: 15px 0; border-left: 3px solid #333;">
                 <strong>#{idx}</strong> - <small>{msg['date']}</small><br><br>
@@ -549,11 +567,27 @@ class EmailTemplate:
                 source = content = detection_date = None
                 
                 try:
-                    json_part = text.split('**')[0].strip()
-                    data = json.loads(json_part)
-                    source = data.get('Source', 'N/A')
-                    content = data.get('Content', 'N/A')
-                    detection_date = data.get('Detection Date', 'N/A')
+                    # Try different parsing methods
+                    try:
+                        data = json.loads(text)
+                        source = data.get('Source', data.get('source', 'N/A'))
+                        content = data.get('Content', data.get('content', 'N/A'))
+                        detection_date = data.get('Detection Date', data.get('detection_date', 'N/A'))
+                    except:
+                        json_part = text
+                        if '**' in text:
+                            json_part = text.split('**')[0].strip()
+                        elif '\n\n' in text:
+                            json_part = text.split('\n\n')[0].strip()
+                        
+                        import re
+                        json_match = re.search(r'\{[^}]+\}', json_part, re.DOTALL)
+                        if json_match:
+                            json_str = json_match.group(0)
+                            data = json.loads(json_str)
+                            source = data.get('Source', data.get('source', 'N/A'))
+                            content = data.get('Content', data.get('content', 'N/A'))
+                            detection_date = data.get('Detection Date', data.get('detection_date', 'N/A'))
                 except:
                     source = content = detection_date = 'N/A'
                 
@@ -660,7 +694,6 @@ class SearchAndListenMonitor:
         print(f"✅ Connected to Telegram as {me.first_name}")
     
     def send_email(self, subject, html_content):
-        
         """Send email"""
         if not EMAIL_FROM or not EMAIL_PASSWORD or not EMAIL_TO:
             print("[!] Missing EMAIL_FROM, EMAIL_PASSWORD or EMAIL_TO in environment")
@@ -706,7 +739,7 @@ class SearchAndListenMonitor:
                 print(f"   ⏭️  Already searched, skipping initial search")
                 return channel_id
             
-             # Get search keywords
+            # Get search keywords
             search_keywords = []
             if filter_config and filter_config.get('type') in ['contains', 'contains_all']:
                 filter_value = filter_config.get('value')
@@ -764,6 +797,28 @@ class SearchAndListenMonitor:
             
             # Send batch email with results
             if matched_messages:
+                # Print results summary
+                print(f"\n   📊 SEARCH RESULTS SUMMARY:")
+                print(f"   {'='*50}")
+                print(f"   Total messages found: {len(matched_messages)}")
+                print(f"   {'='*50}")
+                
+                # Print first 3 messages as preview
+                preview_count = min(3, len(matched_messages))
+                for idx, msg in enumerate(matched_messages[:preview_count], 1):
+                    print(f"\n   Message #{idx}:")
+                    print(f"   Date: {msg['date']}")
+                    print(f"   ID: {msg['id']}")
+                    # Print first 200 chars of message
+                    preview_text = msg['text'][:200].replace('\n', ' ')
+                    print(f"   Preview: {preview_text}...")
+                    print(f"   {'-'*50}")
+                
+                if len(matched_messages) > preview_count:
+                    print(f"\n   ... and {len(matched_messages) - preview_count} more messages")
+                
+                print(f"\n   {'='*50}")
+                
                 template = config.get('template', 'clean')
                 email_subject = f"[Initial Search] {config.get('email_subject', channel_name)}"
                 
@@ -855,15 +910,11 @@ class SearchAndListenMonitor:
             print(f"   Preview: {message.text[:100]}...")
             
             # Send email
-            email_to = config.get('email_to')
-            if email_to:
-                email_subject = f"[New] {config.get('email_subject', channel_name)}"
-                template = config.get('template', 'clean')
-                
-                html_content = EmailTemplate.create_email(channel_name, msg_data, template)
-                self.send_email(email_to, email_subject, html_content)
-            else:
-                print(f"   ⚠️  No email configured")
+            email_subject = f"[New] {config.get('email_subject', channel_name)}"
+            template = config.get('template', 'clean')
+            
+            html_content = EmailTemplate.create_email(channel_name, msg_data, template)
+            self.send_email(email_subject, html_content)
                 
         except Exception as e:
             print(f"❌ Error handling message: {e}")
