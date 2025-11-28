@@ -5,9 +5,8 @@
     "limit": 50,
     "filter": {
       "type": "contains",
-      "value": "napas"
+      "value": ["napas", "visa", "mastercard", "vietnam bank", "vietnam id", "vietnam info", "vietnam citizen", "vietcombank", "agribank", "bidv", "techcombank", "mbbank", "vietinbank"]
     },
-    "email_to": "ducdh@napas.com.vn",
     "email_subject": "Data Leak Alert",
     "template": "clean"
   },
@@ -15,8 +14,10 @@
     "name": "cvedetect",
     "username": "@cvedetector",
     "limit": 30,
-    "filter": null,
-    "email_to": "ducdh@napas.com.vn",
+    "filter": {
+      "type": "contains",
+      "value": ["microsoft teams", "7-zip", "7zip", "vietnam bank", "apache", "nginx", "cisco", "fortinet", "paloalto", "vmware"]
+    },
     "email_subject": "CVE News",
     "template": "clean"
   }

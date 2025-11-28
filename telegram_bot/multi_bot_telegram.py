@@ -20,6 +20,7 @@ API_HASH = os.getenv('TELEGRAM_API_HASH')
 # Email credentials
 EMAIL_FROM = os.getenv('EMAIL_FROM')
 EMAIL_PASSWORD = os.getenv('EMAIL_PASSWORD')
+EMAIL_TO = os.getenv('EMAIL_TO')  # Can be comma-separated for multiple recipients
 SMTP_SERVER = os.getenv('SMTP_SERVER', 'smtp.gmail.com')
 SMTP_PORT = int(os.getenv('SMTP_PORT', '465'))
 
@@ -57,16 +58,28 @@ class BotFilter:
         if not filter_value:
             return True
         
+         # Support multiple keywords (list or comma-separated string)
+        keywords = []
+        if isinstance(filter_value, list):
+            keywords = filter_value
+        elif isinstance(filter_value, str):
+            keywords = [k.strip() for k in filter_value.split(',')]
+        
         if filter_type == 'contains':
-            return filter_value.lower() in message_text.lower()
+            # Match if ANY keyword is found
+            return any(keyword.lower() in message_text.lower() for keyword in keywords)
+        elif filter_type == 'contains_all':
+            # Match if ALL keywords are found
+            return all(keyword.lower() in message_text.lower() for keyword in keywords)
         elif filter_type == 'starts_with':
-            return message_text.lower().startswith(filter_value.lower())
+            return any(message_text.lower().startswith(keyword.lower()) for keyword in keywords)
         elif filter_type == 'ends_with':
-            return message_text.lower().endswith(filter_value.lower())
+            return any(message_text.lower().endswith(keyword.lower()) for keyword in keywords)
         elif filter_type == 'regex':
             return bool(re.search(filter_value, message_text, re.IGNORECASE))
         elif filter_type == 'not_contains':
-            return filter_value.lower() not in message_text.lower()
+            # Match if NONE of the keywords are found
+            return not any(keyword.lower() in message_text.lower() for keyword in keywords)
         
         return True
 
@@ -115,52 +128,193 @@ class EmailTemplate:
     @staticmethod
     def detailed_template(channel_name, message):
         """Detailed template for single message"""
-        formated_text = message['text'].replace('\n', '<br>')
-        html = f"""
-        <html>
-        <head>
-            <style>
-                body {{ margin: 0; padding: 0; font-family: Arial, sans-serif; }}
-                .container {{ max-width: 600px; margin: 20px auto; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }}
-                .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; }}
-                .content {{ padding: 20px; background: white; }}
-                .message {{ background: #f8f9fa; padding: 15px; border-radius: 5px; border-left: 4px solid #667eea; }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="header">
-                    <h2 style="margin:0;">🔔 New Message</h2>
-                    <p style="margin:5px 0 0 0; opacity:0.9;">{channel_name}</p>
-                </div>
-                <div class="content">
-                    <div class="message">
-                        <small style="color:#666;">{message['date']} (ID: {message['id']})</small><br><br>
-                        {formated_text}
+        # Parse structured data if present
+        text = message['text']
+        title = content = None
+        
+        # Try to extract structured fields
+        if '"Title":' in text or '"CVE ID":' in text:
+            import json
+            try:
+                # Extract JSON part (before the ** markers)
+                json_part = text.split('**')[0].strip()
+                data = json.loads(json_part)
+                title = data.get('Title', '')
+                content = data.get('Content', '')
+                
+                # Remove the "Visit the link..." sentence from content
+                if content:
+                    content = re.sub(r'Visit the link.*?\.\.\.', '', content, flags=re.IGNORECASE | re.DOTALL).strip()
+            except:
+                pass
+        
+        # If structured data found, use formal CVE report template
+        if title or content:
+            # Format content with line breaks
+            formatted_content = content.replace('\n', '<br>') if content else 'N/A'
+            
+            html = f"""
+            <html>
+            <head>
+                <style>
+                    body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background-color: #f5f5f5; }}
+                    .container {{ max-width: 700px; margin: 40px auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }}
+                    .header {{ background: linear-gradient(135deg, #c62828 0%, #e53935 100%); color: white; padding: 30px; text-align: center; }}
+                    .header h1 {{ margin: 0; font-size: 24px; font-weight: 600; }}
+                    .header p {{ margin: 5px 0 0 0; opacity: 0.9; font-size: 14px; }}
+                    .content {{ padding: 35px; }}
+                    .title-section {{ background: #fff3e0; border-left: 4px solid #e53935; padding: 20px; margin-bottom: 30px; border-radius: 4px; }}
+                    .title-label {{ font-size: 11px; text-transform: uppercase; color: #c62828; font-weight: 600; letter-spacing: 0.5px; margin-bottom: 10px; }}
+                    .title-value {{ font-size: 18px; color: #333; font-weight: 600; line-height: 1.4; }}
+                    .field {{ margin-bottom: 25px; }}
+                    .field-label {{ font-size: 11px; text-transform: uppercase; color: #666; font-weight: 600; letter-spacing: 0.5px; margin-bottom: 8px; }}
+                    .field-value {{ font-size: 14px; color: #333; line-height: 1.8; padding: 15px; background: #f8f9fa; border-left: 3px solid #e53935; border-radius: 4px; }}
+                    .footer {{ padding: 20px 35px; background: #f8f9fa; border-top: 1px solid #e0e0e0; text-align: center; font-size: 12px; color: #666; }}
+                    .timestamp {{ color: #999; font-size: 11px; }}
+                    .cve-badge {{ display: inline-block; background: #c62828; color: white; padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: 600; margin-bottom: 10px; }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>⚠️ CVE Security Alert</h1>
+                        <p>{channel_name}</p>
+                    </div>
+                    <div class="content">
+                        <div class="title-section">
+                            <span class="cve-badge">VULNERABILITY ALERT</span>
+                            <div class="title-label">Vulnerability Title</div>
+                            <div class="title-value">{title if title else 'N/A'}</div>
+                        </div>
+                        <div class="field">
+                            <div class="field-label">Details & Description</div>
+                            <div class="field-value">{formatted_content if formatted_content else 'N/A'}</div>
+                        </div>
+                    </div>
+                    <div class="footer">
+                        <div class="timestamp">Report generated: {message['date']}</div>
+                        <div style="margin-top: 8px;">Message ID: {message['id']}</div>
                     </div>
                 </div>
-            </div>
-        </body>
-        </html>
-        """
+            </body>
+            </html>
+            """
+        else:
+            # Fallback to original detailed template
+            formated_text = message['text'].replace('\n', '<br>')
+            html = f"""
+            <html>
+            <head>
+                <style>
+                    body {{ margin: 0; padding: 0; font-family: Arial, sans-serif; }}
+                    .container {{ max-width: 600px; margin: 20px auto; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }}
+                    .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; }}
+                    .content {{ padding: 20px; background: white; }}
+                    .message {{ background: #f8f9fa; padding: 15px; border-radius: 5px; border-left: 4px solid #667eea; }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h2 style="margin:0;">🔔 New Message</h2>
+                        <p style="margin:5px 0 0 0; opacity:0.9;">{channel_name}</p>
+                    </div>
+                    <div class="content">
+                        <div class="message">
+                            <small style="color:#666;">{message['date']} (ID: {message['id']})</small><br><br>
+                            {formated_text}
+                        </div>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """
         return html
+
     
     @staticmethod
     def clean_template(channel_name, message):
+        
         """Clean template for single message"""
-        html = f"""
-        <html>
-        <body style="font-family: 'Courier New', monospace; margin: 0; padding: 40px; background: white; color: #000;">
-            <div style="border-bottom: 1px solid #000; padding-bottom: 10px; margin-bottom: 20px;">
-                <strong>🔔 NEW: {channel_name}</strong><br>
-                <small>{message['date']}</small>
-            </div>
-            <div style="white-space: pre-wrap; line-height: 1.6;">
+        # Parse structured data if present
+        text = message['text']
+        source = content = detection_date = None
+        
+        # Try to extract structured fields
+        if '"Source":' in text:
+            import json
+            try:
+                # Extract JSON part (before the ** markers)
+                json_part = text.split('**')[0].strip()
+                data = json.loads(json_part)
+                source = data.get('Source', '')
+                content = data.get('Content', '')
+                detection_date = data.get('Detection Date', '')
+            except:
+                pass
+        
+        # If structured data found, use formal report template
+        if source or content or detection_date:
+            html = f"""
+            <html>
+            <head>
+                <style>
+                    body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background-color: #f5f5f5; }}
+                    .container {{ max-width: 650px; margin: 40px auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }}
+                    .header {{ background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; padding: 30px; text-align: center; }}
+                    .header h1 {{ margin: 0; font-size: 24px; font-weight: 600; }}
+                    .header p {{ margin: 5px 0 0 0; opacity: 0.9; font-size: 14px; }}
+                    .content {{ padding: 35px; }}
+                    .field {{ margin-bottom: 25px; }}
+                    .field-label {{ font-size: 11px; text-transform: uppercase; color: #666; font-weight: 600; letter-spacing: 0.5px; margin-bottom: 8px; }}
+                    .field-value {{ font-size: 15px; color: #333; line-height: 1.6; padding: 12px; background: #f8f9fa; border-left: 3px solid #2a5298; border-radius: 4px; }}
+                    .footer {{ padding: 20px 35px; background: #f8f9fa; border-top: 1px solid #e0e0e0; text-align: center; font-size: 12px; color: #666; }}
+                    .timestamp {{ color: #999; font-size: 11px; }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>🔒 Security Alert</h1>
+                        <p>{channel_name}</p>
+                    </div>
+                    <div class="content">
+                        <div class="field">
+                            <div class="field-label">Source</div>
+                            <div class="field-value">{source if source else 'N/A'}</div>
+                        </div>
+                        <div class="field">
+                            <div class="field-label">Content Description</div>
+                            <div class="field-value">{content if content else 'N/A'}</div>
+                        </div>
+                        <div class="field">
+                            <div class="field-label">Detection Date</div>
+                            <div class="field-value">{detection_date if detection_date else 'N/A'}</div>
+                        </div>
+                    </div>
+                    <div class="footer">
+                        <div class="timestamp">Report generated: {message['date']}</div>
+                        <div style="margin-top: 8px;">Message ID: {message['id']}</div>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """
+        else:
+            # Fallback to original clean template for non-structured data
+            html = f"""
+            <html>
+            <body style="font-family: 'Courier New', monospace; margin: 0; padding: 40px; background: white; color: #000;">
+                <div style="border-bottom: 1px solid #000; padding-bottom: 10px; margin-bottom: 20px;">
+                    <strong>🔔 NEW: {channel_name}</strong><br>
+                    <small>{message['date']}</small>
+                </div>
+                <div style="white-space: pre-wrap; line-height: 1.6;">
 {message['text']}
-            </div>
-        </body>
-        </html>
-        """
+                </div>
+            </body>
+            </html>
+            """
         return html
     
     @staticmethod
@@ -193,77 +347,279 @@ class EmailTemplate:
     @staticmethod
     def detailed_batch_template(channel_name, messages):
         """Detailed batch template"""
+        # Check if messages contain CVE structured data
+        has_cve_data = False
+        if messages and ('"Title":' in messages[0]['text'] or '"CVE ID":' in messages[0]['text']):
+            has_cve_data = True
         
-        formated_text = msg['text'].replace('\n', '<br>')
-        html = f"""
-        <html>
-        <head>
-            <style>
-                body {{ margin: 0; padding: 0; font-family: Arial, sans-serif; background: #f4f4f4; }}
-                .container {{ max-width: 800px; margin: 20px auto; background: white; }}
-                .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; }}
-                .content {{ padding: 20px; }}
-                .message {{ background: #f8f9fa; padding: 20px; margin: 15px 0; border-radius: 8px; border-left: 4px solid #667eea; }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="header">
-                    <h1>📊 Initial Search Results</h1>
-                    <p style="margin:5px 0; opacity:0.9;">{channel_name}</p>
-                    <p style="margin:5px 0; opacity:0.9;">Found {len(messages)} messages</p>
-                    <p style="margin:5px 0; opacity:0.9; font-size:14px;">{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
-                </div>
-                <div class="content">
-        """
-        
-        for idx, msg in enumerate(messages, 1):
+        if has_cve_data:
+            html = f"""
+            <html>
+            <head>
+                <style>
+                    body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background-color: #f5f5f5; }}
+                    .container {{ max-width: 850px; margin: 40px auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }}
+                    .header {{ background: linear-gradient(135deg, #c62828 0%, #e53935 100%); color: white; padding: 35px; text-align: center; }}
+                    .header h1 {{ margin: 0; font-size: 28px; font-weight: 600; }}
+                    .header p {{ margin: 8px 0 0 0; opacity: 0.9; font-size: 15px; }}
+                    .summary {{ padding: 25px 35px; background: #fff3e0; border-bottom: 1px solid #e0e0e0; }}
+                    .summary-item {{ display: inline-block; margin-right: 30px; }}
+                    .summary-label {{ font-size: 11px; text-transform: uppercase; color: #c62828; font-weight: 600; }}
+                    .summary-value {{ font-size: 24px; color: #c62828; font-weight: 600; }}
+                    .content {{ padding: 35px; }}
+                    .cve-item {{ background: white; border: 1px solid #e0e0e0; border-radius: 6px; margin-bottom: 25px; overflow: hidden; }}
+                    .cve-header {{ background: #f8f9fa; padding: 15px 20px; border-bottom: 1px solid #e0e0e0; }}
+                    .cve-number {{ font-weight: 600; color: #c62828; }}
+                    .cve-badge {{ display: inline-block; background: #c62828; color: white; padding: 3px 10px; border-radius: 10px; font-size: 10px; font-weight: 600; margin-left: 10px; }}
+                    .cve-body {{ padding: 25px; }}
+                    .title-section {{ background: #fff3e0; border-left: 4px solid #e53935; padding: 15px; margin-bottom: 20px; border-radius: 4px; }}
+                    .title-value {{ font-size: 16px; color: #333; font-weight: 600; line-height: 1.5; }}
+                    .field {{ margin-bottom: 15px; }}
+                    .field-label {{ font-size: 11px; text-transform: uppercase; color: #666; font-weight: 600; letter-spacing: 0.5px; margin-bottom: 8px; }}
+                    .field-value {{ font-size: 14px; color: #333; line-height: 1.7; padding: 12px; background: #f8f9fa; border-left: 3px solid #e53935; border-radius: 3px; }}
+                    .footer {{ padding: 20px 35px; background: #f8f9fa; border-top: 1px solid #e0e0e0; text-align: center; font-size: 12px; color: #666; }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>⚠️ CVE Security Report</h1>
+                        <p>{channel_name}</p>
+                    </div>
+                    <div class="summary">
+                        <div class="summary-item">
+                            <div class="summary-label">Total Vulnerabilities</div>
+                            <div class="summary-value">{len(messages)}</div>
+                        </div>
+                        <div class="summary-item">
+                            <div class="summary-label">Report Date</div>
+                            <div class="summary-value" style="font-size: 16px;">{datetime.now().strftime('%Y-%m-%d %H:%M')}</div>
+                        </div>
+                    </div>
+                    <div class="content">
+            """
+            
+            for idx, msg in enumerate(messages, 1):
+                # Parse structured data
+                text = msg['text']
+                title = content = None
+                
+                try:
+                    json_part = text.split('**')[0].strip()
+                    data = json.loads(json_part)
+                    title = data.get('Title', 'N/A')
+                    content = data.get('Content', 'N/A')
+                    
+                    # Remove the "Visit the link..." sentence
+                    if content:
+                        content = re.sub(r'Visit the link.*?\.\.\.', '', content, flags=re.IGNORECASE | re.DOTALL).strip()
+                    
+                    formatted_content = content.replace('\n', '<br>')
+                except:
+                    title = 'N/A'
+                    formatted_content = 'N/A'
+                
+                html += f"""
+                        <div class="cve-item">
+                            <div class="cve-header">
+                                <span class="cve-number">CVE #{idx}</span>
+                                <span class="cve-badge">VULNERABILITY</span>
+                                <span style="float: right; color: #999; font-size: 12px;">ID: {msg['id']}</span>
+                            </div>
+                            <div class="cve-body">
+                                <div class="title-section">
+                                    <div class="title-value">{title}</div>
+                                </div>
+                                <div class="field">
+                                    <div class="field-label">Details & Description</div>
+                                    <div class="field-value">{formatted_content}</div>
+                                </div>
+                            </div>
+                        </div>
+                """
+            
             html += f"""
-            <div class="message">
-                <div style="color:#667eea; font-weight:bold;">Message #{idx} (ID: {msg['id']})</div>
-                <div style="color:#666; font-size:13px; margin:5px 0;">{msg['date']}</div>
-                <div style="margin-top:10px;">{formated_text}</div>
-            </div>
+                    </div>
+                    <div class="footer">
+                        <div>Initial search completed on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</div>
+                        <div style="margin-top: 5px; color: #999;">This is an automated CVE vulnerability report</div>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """
+        else:
+            # Fallback to original template
+            html = f"""
+            <html>
+            <head>
+                <style>
+                    body {{ margin: 0; padding: 0; font-family: Arial, sans-serif; background: #f4f4f4; }}
+                    .container {{ max-width: 800px; margin: 20px auto; background: white; }}
+                    .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; }}
+                    .content {{ padding: 20px; }}
+                    .message {{ background: #f8f9fa; padding: 20px; margin: 15px 0; border-radius: 8px; border-left: 4px solid #667eea; }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>📊 Initial Search Results</h1>
+                        <p style="margin:5px 0; opacity:0.9;">{channel_name}</p>
+                        <p style="margin:5px 0; opacity:0.9;">Found {len(messages)} messages</p>
+                        <p style="margin:5px 0; opacity:0.9; font-size:14px;">{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+                    </div>
+                    <div class="content">
+            """
+            
+            for idx, msg in enumerate(messages, 1):
+                formated_text = msg['text'].replace('\n', '<br>')
+                html += f"""
+                <div class="message">
+                    <div style="color:#667eea; font-weight:bold;">Message #{idx} (ID: {msg['id']})</div>
+                    <div style="color:#666; font-size:13px; margin:5px 0;">{msg['date']}</div>
+                    <div style="margin-top:10px;">{formated_text}</div>
+                </div>
+                """
+            
+            html += """
+                    </div>
+                </div>
+            </body>
+            </html>
             """
         
-        html += """
-                </div>
-            </div>
-        </body>
-        </html>
-        """
         return html
     
     @staticmethod
     def clean_batch_template(channel_name, messages):
         """Clean batch template"""
-        html = f"""
-        <html>
-        <body style="font-family: 'Courier New', monospace; margin: 0; padding: 40px; background: white; color: #000;">
-            <div style="border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 30px;">
-                <strong>INITIAL SEARCH RESULTS</strong><br>
-                <strong>{channel_name}</strong><br>
-                {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}<br>
-                Messages found: {len(messages)}
-            </div>
-        """
+        # Check if messages contain structured data
+        has_structured_data = False
+        if messages and '"Source":' in messages[0]['text']:
+            has_structured_data = True
         
-        for idx, msg in enumerate(messages, 1):
+        if has_structured_data:
+            html = f"""
+            <html>
+            <head>
+                <style>
+                    body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background-color: #f5f5f5; }}
+                    .container {{ max-width: 800px; margin: 40px auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }}
+                    .header {{ background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; padding: 35px; text-align: center; }}
+                    .header h1 {{ margin: 0; font-size: 28px; font-weight: 600; }}
+                    .header p {{ margin: 8px 0 0 0; opacity: 0.9; font-size: 15px; }}
+                    .summary {{ padding: 25px 35px; background: #f8f9fa; border-bottom: 1px solid #e0e0e0; }}
+                    .summary-item {{ display: inline-block; margin-right: 30px; }}
+                    .summary-label {{ font-size: 11px; text-transform: uppercase; color: #666; font-weight: 600; }}
+                    .summary-value {{ font-size: 24px; color: #2a5298; font-weight: 600; }}
+                    .content {{ padding: 35px; }}
+                    .alert-item {{ background: white; border: 1px solid #e0e0e0; border-radius: 6px; margin-bottom: 20px; overflow: hidden; }}
+                    .alert-header {{ background: #f8f9fa; padding: 15px 20px; border-bottom: 1px solid #e0e0e0; }}
+                    .alert-number {{ font-weight: 600; color: #2a5298; }}
+                    .alert-body {{ padding: 20px; }}
+                    .field {{ margin-bottom: 15px; }}
+                    .field-label {{ font-size: 11px; text-transform: uppercase; color: #666; font-weight: 600; letter-spacing: 0.5px; margin-bottom: 5px; }}
+                    .field-value {{ font-size: 14px; color: #333; line-height: 1.5; padding: 10px; background: #f8f9fa; border-left: 3px solid #2a5298; border-radius: 3px; }}
+                    .footer {{ padding: 20px 35px; background: #f8f9fa; border-top: 1px solid #e0e0e0; text-align: center; font-size: 12px; color: #666; }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>🔒 Security Alert Report</h1>
+                        <p>{channel_name}</p>
+                    </div>
+                    <div class="summary">
+                        <div class="summary-item">
+                            <div class="summary-label">Total Alerts</div>
+                            <div class="summary-value">{len(messages)}</div>
+                        </div>
+                        <div class="summary-item">
+                            <div class="summary-label">Report Date</div>
+                            <div class="summary-value" style="font-size: 16px;">{datetime.now().strftime('%Y-%m-%d %H:%M')}</div>
+                        </div>
+                    </div>
+                    <div class="content">
+            """
+            
+            for idx, msg in enumerate(messages, 1):
+                # Parse structured data
+                text = msg['text']
+                source = content = detection_date = None
+                
+                try:
+                    json_part = text.split('**')[0].strip()
+                    data = json.loads(json_part)
+                    source = data.get('Source', 'N/A')
+                    content = data.get('Content', 'N/A')
+                    detection_date = data.get('Detection Date', 'N/A')
+                except:
+                    source = content = detection_date = 'N/A'
+                
+                html += f"""
+                        <div class="alert-item">
+                            <div class="alert-header">
+                                <span class="alert-number">Alert #{idx}</span>
+                                <span style="float: right; color: #999; font-size: 12px;">ID: {msg['id']}</span>
+                            </div>
+                            <div class="alert-body">
+                                <div class="field">
+                                    <div class="field-label">Source</div>
+                                    <div class="field-value">{source}</div>
+                                </div>
+                                <div class="field">
+                                    <div class="field-label">Content Description</div>
+                                    <div class="field-value">{content}</div>
+                                </div>
+                                <div class="field">
+                                    <div class="field-label">Detection Date</div>
+                                    <div class="field-value">{detection_date}</div>
+                                </div>
+                            </div>
+                        </div>
+                """
+            
             html += f"""
-            <div style="border-bottom: 1px solid #ddd; padding: 20px 0;">
-                <div style="font-size: 11px; color: #666; margin-bottom: 10px;">
-                    #{idx} - {msg['date']} (ID: {msg['id']})
+                    </div>
+                    <div class="footer">
+                        <div>Initial search completed on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</div>
+                        <div style="margin-top: 5px; color: #999;">This is an automated security report</div>
+                    </div>
                 </div>
-                <div style="white-space: pre-wrap; line-height: 1.6;">
+            </body>
+            </html>
+            """
+        else:
+            # Fallback to original template
+            html = f"""
+            <html>
+            <body style="font-family: 'Courier New', monospace; margin: 0; padding: 40px; background: white; color: #000;">
+                <div style="border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 30px;">
+                    <strong>INITIAL SEARCH RESULTS</strong><br>
+                    <strong>{channel_name}</strong><br>
+                    {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}<br>
+                    Messages found: {len(messages)}
+                </div>
+            """
+            
+            for idx, msg in enumerate(messages, 1):
+                html += f"""
+                <div style="border-bottom: 1px solid #ddd; padding: 20px 0;">
+                    <div style="font-size: 11px; color: #666; margin-bottom: 10px;">
+                        #{idx} - {msg['date']} (ID: {msg['id']})
+                    </div>
+                    <div style="white-space: pre-wrap; line-height: 1.6;">
 {msg['text']}
+                    </div>
                 </div>
-            </div>
+                """
+            
+            html += """
+            </body>
+            </html>
             """
         
-        html += """
-        </body>
-        </html>
-        """
         return html
 
 
