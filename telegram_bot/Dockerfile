@@ -9,6 +9,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy script
 COPY multi_bot_telegram.py .
+COPY email_templates_file.py .
 COPY channels.json .
 
 # Create directory for session files
