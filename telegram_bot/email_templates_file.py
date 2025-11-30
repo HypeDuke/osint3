@@ -313,7 +313,7 @@ class EmailTemplate:
                 body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background-color: #f5f5f5; }}
                 .container {{ max-width: 800px; margin: 40px auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }}
                 .header {{ background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; padding: 35px; text-align: center; }}
-                .header h1 {{ margin: 0; font-size: 28px; font-weight: 600; }}
+                .header h1 {{ margin: 0; font-size: 28px; font-weight: 600; color: blue; }}
                 .header p {{ margin: 8px 0 0 0; opacity: 0.9; font-size: 15px; }}
                 .summary {{ padding: 25px 35px; background: #e3f2fd; border-bottom: 1px solid #e0e0e0; }}
                 .summary-item {{ display: inline-block; margin-right: 30px; }}
@@ -414,7 +414,7 @@ class EmailTemplate:
                 body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background-color: #f5f5f5; }}
                 .container {{ max-width: 850px; margin: 40px auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }}
                 .header {{ background: linear-gradient(135deg, #c62828 0%, #e53935 100%); color: white; padding: 35px; text-align: center; }}
-                .header h1 {{ margin: 0; font-size: 28px; font-weight: 600; }}
+                .header h1 {{ margin: 0; font-size: 28px; font-weight: 600; color: red; }}
                 .header p {{ margin: 8px 0 0 0; opacity: 0.9; font-size: 15px; }}
                 .summary {{ padding: 25px 35px; background: #fff3e0; border-bottom: 1px solid #e0e0e0; }}
                 .summary-item {{ display: inline-block; margin-right: 30px; }}

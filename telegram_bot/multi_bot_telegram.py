@@ -22,6 +22,7 @@ API_HASH = os.getenv('TELEGRAM_API_HASH')
 EMAIL_FROM = os.getenv('EMAIL_FROM')
 EMAIL_PASSWORD = os.getenv('EMAIL_PASSWORD')
 EMAIL_TO = os.getenv('EMAIL_TO')  # Can be comma-separated for multiple recipients
+HC_EMAIL_TO = os.getenv('HC_EMAIL_TO')  # Health check email recipient(s)
 SMTP_SERVER = os.getenv('SMTP_SERVER', 'smtp.gmail.com')
 SMTP_PORT = int(os.getenv('SMTP_PORT', '465'))
 
@@ -75,10 +76,83 @@ class SearchAndListenMonitor:
     
     async def connect(self):
         """Connect to Telegram"""
-        await self.client.start()
-        me = await self.client.get_me()
-        print(f"✅ Connected to Telegram as {me.first_name}")
-    
+        try:
+            await self.client.start()
+            me = await self.client.get_me()
+            print(f"✅ Connected to Telegram as {me.first_name}")
+
+            # Send health check email on successful connection
+            self.send_health_check_email(status="success", message=f"Successfully connected as {me.first_name}")
+            return True
+        except Exception as e:
+            print(f"❌ Connection failed: {e}")
+            # Send health check email on connection failure
+            self.send_health_check_email(status="failed", message=str(e))
+            return False
+
+    def send_health_check_email(self, status="success", message=""):
+        """Send health check notification email"""
+        if not EMAIL_FROM or not EMAIL_PASSWORD or not HC_EMAIL_TO:
+            return
+        
+        try:
+            status_color = "#28a745" if status == "success" else "#dc3545"
+            status_icon = "✅" if status == "success" else "❌"
+            status_text = "Connected" if status == "success" else "Connection Failed"
+            
+            html_content = f"""
+            <html>
+            <head>
+                <style>
+                    body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background-color: #f5f5f5; }}
+                    .container {{ max-width: 600px; margin: 40px auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }}
+                    .header {{ background: {status_color}; color: white; padding: 30px; text-align: center; }}
+                    .header h1 {{ margin: 0; font-size: 24px; font-weight: 600; color: white; }}
+                    .content {{ padding: 35px; }}
+                    .status-badge {{ display: inline-block; background: {status_color}; color: white; padding: 8px 16px; border-radius: 20px; font-size: 14px; font-weight: 600; margin-bottom: 20px; }}
+                    .info-box {{ background: #f8f9fa; padding: 15px; border-left: 4px solid {status_color}; border-radius: 4px; margin-top: 20px; }}
+                    .footer {{ padding: 20px 35px; background: #f8f9fa; border-top: 1px solid #e0e0e0; text-align: center; font-size: 12px; color: #666; }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>{status_icon} Telegram Monitor Health Check</h1>
+                    </div>
+                    <div class="content">
+                        <span class="status-badge">{status_text}</span>
+                        <h3>Status Report</h3>
+                        <div class="info-box">
+                            <strong>Message:</strong><br>
+                            {message}
+                        </div>
+                        <div class="info-box">
+                            <strong>Timestamp:</strong><br>
+                            {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+                        </div>
+                    </div>
+                    <div class="footer">
+                        <div>Napas OSINT Monitor</div>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """
+            
+            to_emails = [email.strip() for email in HC_EMAIL_TO.split(',')]
+            msg = MIMEText(html_content, "html", "utf-8")
+            msg["Subject"] = f"[Health Check] Telegram Monitor - {status_text}"
+            msg["From"] = EMAIL_FROM
+            msg["To"] = ", ".join(to_emails)
+            
+            with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+                server.login(EMAIL_FROM, EMAIL_PASSWORD)
+                server.sendmail(EMAIL_FROM, to_emails, msg.as_string())
+            
+            print(f"   📧 Health check email sent")
+        except Exception as e:
+            print(f"   ⚠️  Could not send health check email: {e}")
+
     def send_email(self, subject, html_content):
         """Send email"""
         if not EMAIL_FROM or not EMAIL_PASSWORD or not EMAIL_TO:
@@ -309,7 +383,12 @@ class SearchAndListenMonitor:
     
     async def run_monitor(self):
         """Main monitoring process"""
-        await self.connect()
+        # Try to connect
+        connected = await self.connect()
+    
+        if not connected:
+            print("❌ Failed to connect to Telegram. Exiting...")
+            return
         
         # Phase 1: Initial search (only on first run)
         await self.initialize_channels()
@@ -340,7 +419,8 @@ class SearchAndListenMonitor:
         except KeyboardInterrupt:
             print("\n👋 Stopping monitor...")
             self.save_state()
-
+    
+        
 
 async def main():
     monitor = SearchAndListenMonitor()
