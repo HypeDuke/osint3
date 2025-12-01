@@ -69,7 +69,7 @@ services:
     depends_on:
       - elasticsearch
     volumes:
-      - ./sessions:/app/sessions 
+      - ./telegram_bot/sessions:/app/sessions 
 
 volumes:
   esdata:
