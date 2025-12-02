@@ -68,8 +68,11 @@ services:
     restart: unless-stopped
     depends_on:
       - elasticsearch
+    environment:
+      - TZ=Asia/Ho_Chi_Minh  # Set timezone
     volumes:
       - ./telegram_bot/sessions:/app/sessions 
+      - /etc/localtime:/etc/localtime:ro  # Sync system time 
 
 volumes:
   esdata:
