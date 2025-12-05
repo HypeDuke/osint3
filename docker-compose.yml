@@ -16,7 +16,7 @@ services:
     build: ./crawler
     container_name: crawler
     volumes:
-      - /mnt/hgfs/sharevm:/app/data:ro
+      - /mnt/sharevm1:/app/data:ro
       - crawler_state:/app/state
     env_file:
       - ./crawler/.env
@@ -68,11 +68,9 @@ services:
     restart: unless-stopped
     depends_on:
       - elasticsearch
-    environment:
-      - TZ=Asia/Ho_Chi_Minh  # Set timezone
+     
     volumes:
       - ./telegram_bot/sessions:/app/sessions 
-      - /etc/localtime:/etc/localtime:ro  # Sync system time 
 
 volumes:
   esdata:

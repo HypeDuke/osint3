@@ -16,7 +16,7 @@
     "limit": 30,
     "filter": {
       "type": "contains",
-      "value": ["microsoft teams", "7-zip", "apache tomcat", "nginx", "cisco", "fortinet", "atlassian", "vmware", "docker", "splunk"]
+      "value": ["microsoft teams", "7-zip", "apache tomcat", "nginx", "cisco", "fortinet", "atlassian", "vmware", "docker", "splunk", "redis", "kafka", "kubernetes"]
     },
     "email_subject": "CVE News",
     "template": "cve"
