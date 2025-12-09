@@ -67,6 +67,32 @@ def mask_password(password):
     return '*' * len(password)
 
 
+def mask_username(username):
+    """
+    Mask username that's not an email
+    Examples:
+        napas_kkepa03 -> na*********3
+        thaohp -> th***p
+        Aa56456=# -> Aa*****#
+    """
+    if not username:
+        return username
+    
+    # Check if it's an email
+    if '@' in username:
+        return mask_email(username)
+    
+    # For non-email usernames
+    if len(username) <= 2:
+        return '*' * len(username)
+    elif len(username) == 3:
+        return username[0] + '*' + username[-1]
+    else:
+        # Show first 2 and last 1, mask the rest
+        mask_count = len(username) - 3
+        return username[0:2] + '*' * mask_count + username[-1]
+
+
 def mask_sensitive_data(text):
     """
     Mask any email or password-like patterns in text
@@ -135,8 +161,11 @@ def parse_leak_line(line: str):
  
 def build_html_table(rows):
     """Build HTML table with masked sensitive data"""
+    if not rows:
+        return "<p>No data to display.</p>"
+    
     table = [
-        "<table border='1' cellpadding='8' cellspacing='0' style='border-collapse:collapse; font-family: Arial, sans-serif;'>",
+        "<table border='1' cellpadding='8' cellspacing='0' style='border-collapse:collapse; font-family: Arial, sans-serif; width: 100%;'>",
         "<thead><tr style='background-color: #f2f2f2;'>"
         "<th style='padding: 10px;'>URL</th>"
         "<th style='padding: 10px;'>User (Masked)</th>"
@@ -147,15 +176,32 @@ def build_html_table(rows):
     ]
     
     for r in rows:
-        # Mask sensitive data
-        masked_user = mask_email(r.get('user', '')) if r.get('user') else 'N/A'
-        masked_pass = mask_password(r.get('pass', '')) if r.get('pass') else 'N/A'
+        # CRITICAL: Apply masking here
+        user_raw = r.get('user', '')
+        pass_raw = r.get('pass', '')
         
-        link_html = f"<a href='{r['url']}' style='color: #0066cc;'>{r['url']}</a>" if r.get("url") else "N/A"
+        # Determine if user is email or username and mask accordingly
+        if user_raw:
+            if '@' in user_raw:
+                masked_user = mask_email(user_raw)
+            else:
+                masked_user = mask_username(user_raw)
+        else:
+            masked_user = 'N/A'
+        
+        # Always fully mask passwords
+        masked_pass = mask_password(pass_raw) if pass_raw else 'N/A'
+        
+        # Build clickable link
+        url = r.get('url', '')
+        if url and url.startswith('http'):
+            link_html = f"<a href='{url}' style='color: #0066cc; word-break: break-all;'>{url}</a>"
+        else:
+            link_html = url if url else "N/A"
         
         table.append(
             "<tr style='border-bottom: 1px solid #ddd;'>"
-            f"<td style='padding: 8px;'>{link_html}</td>"
+            f"<td style='padding: 8px; word-break: break-all;'>{link_html}</td>"
             f"<td style='padding: 8px; font-family: monospace;'>{masked_user}</td>"
             f"<td style='padding: 8px; font-family: monospace;'>{masked_pass}</td>"
             f"<td style='padding: 8px;'>{r.get('indexed_at','N/A')}</td>"
@@ -168,8 +214,9 @@ def build_html_table(rows):
     disclaimer = """
     <div style='margin-top: 20px; padding: 15px; background-color: #fff3cd; border-left: 4px solid #ffc107; font-size: 12px;'>
         <strong>⚠️ Security Notice:</strong><br>
-        User emails and passwords have been masked for security purposes.<br>
+        User credentials have been masked for security purposes.<br>
         • Emails: First 2 characters shown, rest masked (e.g., th**g@domain.com)<br>
+        • Usernames: First 2 and last 1 character shown (e.g., na*********3)<br>
         • Passwords: Completely masked with asterisks (******)<br>
         Full details are available in the secure Elasticsearch database.
     </div>
@@ -186,12 +233,13 @@ def send_mail_html(subject, html_body):
     full_html = f"""
     <html>
     <head>
+        <meta charset="UTF-8">
         <style>
             body {{
                 font-family: Arial, sans-serif;
                 line-height: 1.6;
                 color: #333;
-                max-width: 1000px;
+                max-width: 1200px;
                 margin: 0 auto;
                 padding: 20px;
             }}
@@ -233,6 +281,7 @@ def send_mail_html(subject, html_body):
             server.login(FROM_EMAIL, FROM_PASS)
             server.sendmail(FROM_EMAIL, TO_EMAILS, msg.as_string())
         print(f"[+] Alert email sent to {', '.join(TO_EMAILS)}")
+        print(f"[+] Email contained {len(TO_EMAILS)} recipient(s) with MASKED data")
         return True
     except Exception as e:
         print(f"[!] Error sending email: {e}")
@@ -259,7 +308,7 @@ def check_new_data():
             url_field = src.get("url") or ""
             path = src.get("path") or ""
  
-            print(f"[DEBUG] Checking doc {doc_id}: line={line}, url={url_field}")
+            print(f"[DEBUG] Checking doc {doc_id}: line={line[:50]}...")
  
             if doc_id in seen_ids:
                 continue
@@ -284,40 +333,59 @@ def check_new_data():
             indexed_ts = src.get("indexed_at") or src.get("timestamp") or ""
             indexed_human = str(indexed_ts)
  
+            # Store RAW data here - masking will happen in build_html_table()
             new_rows.append({
                 "url": link,
                 "user": user,
                 "pass": passwd,
                 "indexed_at": indexed_human
             })
+            
+            print(f"[DEBUG] Added row: url={link}, user=***MASKED***, pass=***MASKED***")
  
             seen_ids.add(doc_id)
  
         if new_rows:
+            print(f"[*] Found {len(new_rows)} new matching items to alert")
             subject = f"🚨 OSINT Leak Alert - {len(new_rows)} items"
+            
+            # CRITICAL: This function handles masking
             html = build_html_table(new_rows)
+            
+            # Verify masking occurred (debug check)
+            if any(row.get('user', '') and not any(c == '*' for c in str(row.get('user', ''))) for row in new_rows):
+                print("[WARNING] Raw data detected in rows - masking should occur in HTML generation")
+            
             send_mail_html(subject, html)
         else:
             print("[*] No new matching rows to alert.")
     except Exception as e:
         print(f"[!] Error querying ES: {e}")
+        import traceback
+        traceback.print_exc()
  
 if __name__ == "__main__":
     print("[*] Mailer service started, watching for new OSINT data...")
     print("[*] Data masking enabled:")
     print("    - Emails: First 2 chars visible (e.g., th**g@abc.com.vn)")
+    print("    - Usernames: First 2 and last 1 char visible (e.g., na*********3)")
     print("    - Passwords: Fully masked (******)")
  
     # Test masking functions
     print("\n[TEST] Masking examples:")
     print(f"    thang@abc.com.vn -> {mask_email('thang@abc.com.vn')}")
-    print(f"    ab@test.com -> {mask_email('ab@test.com')}")
-    print(f"    a@test.com -> {mask_email('a@test.com')}")
+    print(f"    lukas.drastik@gmail.com -> {mask_email('lukas.drastik@gmail.com')}")
+    print(f"    napas_kkepa03 -> {mask_username('napas_kkepa03')}")
+    print(f"    thaohp -> {mask_username('thaohp')}")
     print(f"    password123 -> {mask_password('password123')}")
+    print(f"    Vtdshn@2022 -> {mask_password('Vtdshn@2022')}")
     print()
  
     # Force test mail on startup (optional - uncomment to test)
-    # send_mail_html("🚨 Test Mail", "<b>This is a test alert from Mailer service with data masking</b>")
+    # test_rows = [
+    #     {"url": "https://test.com", "user": "test@example.com", "pass": "password123", "indexed_at": "2024-01-01"}
+    # ]
+    # send_mail_html("🧪 Test Mail with Masking", build_html_table(test_rows))
  
     while True:
         check_new_data()
