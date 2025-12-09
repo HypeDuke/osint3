@@ -260,8 +260,8 @@ def send_mail_html(subject, html_body):
     </head>
     <body>
         <div class="header">
-            <h1 style="margin: 0;">🚨 OSINT Leak Alert</h1>
-            <p style="margin: 5px 0 0 0; opacity: 0.9;">Security Monitoring System</p>
+            <h1 style="margin: 0; color: black;">🚨 OSINT Leak Alert</h1>
+            <p style="margin: 5px 0 0 0; opacity: 0.9; color: black;">Security Monitoring System</p>
         </div>
         <div class="content">
             {html_body}
