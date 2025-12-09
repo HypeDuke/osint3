@@ -20,6 +20,71 @@ print("[DEBUG] FROM_EMAIL:", FROM_EMAIL)
 print("[DEBUG] TO_EMAILS:", TO_EMAILS)
 print("[DEBUG] ES_HOST:", ES_HOST)
 print("[DEBUG] INDEX:", INDEX)
+
+
+# ============= DATA MASKING FUNCTIONS =============
+
+def mask_email(email):
+    """
+    Mask email address - keep first 1-2 chars and everything after @
+    Examples:
+        thang@abc.com.vn -> th**g@abc.com.vn
+        a@test.com -> a*@test.com
+        ab@test.com -> ab*@test.com
+    """
+    if not email or '@' not in email:
+        return email
+    
+    local, domain = email.split('@', 1)
+    
+    if len(local) <= 1:
+        # Single character: a -> a*
+        masked_local = local[0] + '*'
+    elif len(local) == 2:
+        # Two characters: ab -> ab*
+        masked_local = local + '*'
+    elif len(local) == 3:
+        # Three characters: abc -> ab*c
+        masked_local = local[0:2] + '*' + local[-1]
+    else:
+        # More than 3: show first 2 and last 1, mask the rest
+        # thang -> th**g
+        mask_count = len(local) - 3
+        masked_local = local[0:2] + '*' * mask_count + local[-1]
+    
+    return f"{masked_local}@{domain}"
+
+
+def mask_password(password):
+    """
+    Completely mask password with asterisks
+    Examples:
+        password123 -> ***********
+        abc -> ***
+    """
+    if not password:
+        return ""
+    return '*' * len(password)
+
+
+def mask_sensitive_data(text):
+    """
+    Mask any email or password-like patterns in text
+    """
+    if not text:
+        return text
+    
+    # Mask emails in text
+    email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+    
+    def replace_email(match):
+        return mask_email(match.group(0))
+    
+    result = re.sub(email_pattern, replace_email, text)
+    return result
+
+# ==================================================
+
  
 # Load keywords from file
 def load_keywords(file_path="keywords.txt"):
@@ -47,6 +112,7 @@ def is_blacklisted(result_line: str) -> bool:
         if b in result_line:
             return True
     return False
+
 # Connect to Elasticsearch
 es = Elasticsearch(ES_HOST)
  
@@ -68,32 +134,95 @@ def parse_leak_line(line: str):
     return (line, "", "")
  
 def build_html_table(rows):
+    """Build HTML table with masked sensitive data"""
     table = [
-        "<table border='1' cellpadding='4' cellspacing='0' style='border-collapse:collapse'>",
-        "<thead><tr>"
-        "<th>URL</th><th>User</th><th>Pass</th><th>Indexed At (UTC+7)</th>"
+        "<table border='1' cellpadding='8' cellspacing='0' style='border-collapse:collapse; font-family: Arial, sans-serif;'>",
+        "<thead><tr style='background-color: #f2f2f2;'>"
+        "<th style='padding: 10px;'>URL</th>"
+        "<th style='padding: 10px;'>User (Masked)</th>"
+        "<th style='padding: 10px;'>Pass (Masked)</th>"
+        "<th style='padding: 10px;'>Indexed At (UTC+7)</th>"
         "</tr></thead>",
         "<tbody>"
     ]
+    
     for r in rows:
-        link_html = f"<a href='{r['url']}'>{r['url']}</a>" if r.get("url") else "N/A"
+        # Mask sensitive data
+        masked_user = mask_email(r.get('user', '')) if r.get('user') else 'N/A'
+        masked_pass = mask_password(r.get('pass', '')) if r.get('pass') else 'N/A'
+        
+        link_html = f"<a href='{r['url']}' style='color: #0066cc;'>{r['url']}</a>" if r.get("url") else "N/A"
+        
         table.append(
-            "<tr>"
-            f"<td>{link_html}</td>"
-            f"<td>{r.get('user','')}</td>"
-            f"<td>{r.get('pass','')}</td>"
-            f"<td>{r.get('indexed_at','')}</td>"
+            "<tr style='border-bottom: 1px solid #ddd;'>"
+            f"<td style='padding: 8px;'>{link_html}</td>"
+            f"<td style='padding: 8px; font-family: monospace;'>{masked_user}</td>"
+            f"<td style='padding: 8px; font-family: monospace;'>{masked_pass}</td>"
+            f"<td style='padding: 8px;'>{r.get('indexed_at','N/A')}</td>"
             "</tr>"
         )
+    
     table.append("</tbody></table>")
-    return "\n".join(table)
+    
+    # Add disclaimer
+    disclaimer = """
+    <div style='margin-top: 20px; padding: 15px; background-color: #fff3cd; border-left: 4px solid #ffc107; font-size: 12px;'>
+        <strong>⚠️ Security Notice:</strong><br>
+        User emails and passwords have been masked for security purposes.<br>
+        • Emails: First 2 characters shown, rest masked (e.g., th**g@domain.com)<br>
+        • Passwords: Completely masked with asterisks (******)<br>
+        Full details are available in the secure Elasticsearch database.
+    </div>
+    """
+    
+    return "\n".join(table) + disclaimer
  
 def send_mail_html(subject, html_body):
     if not FROM_EMAIL or not FROM_PASS or not TO_EMAILS:
         print("[!] Missing FROM_EMAIL, FROM_PASS or TO_EMAIL in environment")
         return False
    
-    msg = MIMEText(html_body, "html", "utf-8")
+    # Wrap content in a nice HTML template
+    full_html = f"""
+    <html>
+    <head>
+        <style>
+            body {{
+                font-family: Arial, sans-serif;
+                line-height: 1.6;
+                color: #333;
+                max-width: 1000px;
+                margin: 0 auto;
+                padding: 20px;
+            }}
+            .header {{
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 20px;
+                border-radius: 8px 8px 0 0;
+                text-align: center;
+            }}
+            .content {{
+                background: white;
+                padding: 20px;
+                border: 1px solid #ddd;
+                border-radius: 0 0 8px 8px;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1 style="margin: 0;">🚨 OSINT Leak Alert</h1>
+            <p style="margin: 5px 0 0 0; opacity: 0.9;">Security Monitoring System</p>
+        </div>
+        <div class="content">
+            {html_body}
+        </div>
+    </body>
+    </html>
+    """
+    
+    msg = MIMEText(full_html, "html", "utf-8")
     msg["Subject"] = subject
     msg["From"] = FROM_EMAIL
     msg["To"] = ", ".join(TO_EMAILS)
@@ -104,8 +233,10 @@ def send_mail_html(subject, html_body):
             server.login(FROM_EMAIL, FROM_PASS)
             server.sendmail(FROM_EMAIL, TO_EMAILS, msg.as_string())
         print(f"[+] Alert email sent to {', '.join(TO_EMAILS)}")
+        return True
     except Exception as e:
         print(f"[!] Error sending email: {e}")
+        return False
  
 def check_new_data():
     try:
@@ -158,7 +289,6 @@ def check_new_data():
                 "user": user,
                 "pass": passwd,
                 "indexed_at": indexed_human
-               
             })
  
             seen_ids.add(doc_id)
@@ -174,11 +304,21 @@ def check_new_data():
  
 if __name__ == "__main__":
     print("[*] Mailer service started, watching for new OSINT data...")
+    print("[*] Data masking enabled:")
+    print("    - Emails: First 2 chars visible (e.g., th**g@abc.com.vn)")
+    print("    - Passwords: Fully masked (******)")
  
-    # Force test mail on startup
-    #send_mail_html("🚨 Test Mail", "<b>This is a test alert from Mailer service</b>")
+    # Test masking functions
+    print("\n[TEST] Masking examples:")
+    print(f"    thang@abc.com.vn -> {mask_email('thang@abc.com.vn')}")
+    print(f"    ab@test.com -> {mask_email('ab@test.com')}")
+    print(f"    a@test.com -> {mask_email('a@test.com')}")
+    print(f"    password123 -> {mask_password('password123')}")
+    print()
+ 
+    # Force test mail on startup (optional - uncomment to test)
+    # send_mail_html("🚨 Test Mail", "<b>This is a test alert from Mailer service with data masking</b>")
  
     while True:
         check_new_data()
         time.sleep(60)
- 
