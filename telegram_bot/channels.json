@@ -20,5 +20,16 @@
     },
     "email_subject": "CVE News",
     "template": "cve"
+  },
+  {
+    "name": "infosecnews",
+    "username": "@hypeduke",
+    "limit": 20,
+    "filter": {
+      "type": "contains",
+      "value": ["napas"]
+    },
+    "email_subject": "Data Leak Alert",
+    "template": "breach"
   }
 ]
