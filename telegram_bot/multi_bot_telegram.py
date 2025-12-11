@@ -10,8 +10,7 @@ from telethon import TelegramClient, events
 from telethon.errors import (
     FloodWaitError, 
     ServerError, 
-    TimedOutError,
-    ConnectionError as TelethonConnectionError
+    TimedOutError
 )
 from dotenv import load_dotenv
 import re
@@ -147,7 +146,7 @@ class SearchAndListenMonitor:
                 print(f"   ⏱️  Timeout on attempt {attempt}")
             except ServerError as e:
                 print(f"   🔴 Server error on attempt {attempt}: {e}")
-            except TelethonConnectionError as e:
+            except OSError  as e:
                 print(f"   🔌 Connection error on attempt {attempt}: {e}")
             except Exception as e:
                 print(f"   ❌ Unexpected error on attempt {attempt}: {e}")
