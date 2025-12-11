@@ -72,6 +72,7 @@ class TestListener:
         print("-"*70)
         
         channel_ids = []
+        channel_entities = []  # Store entities instead of just IDs
         for idx, config in enumerate(CHANNELS_CONFIG, 1):
             try:
                 channel_username = config.get('username')
@@ -131,6 +132,7 @@ class TestListener:
                     
                     if is_member:
                         channel_ids.append(channel_id)
+                        channel_entities.append(entity)  # Store the entity
                         self.channels_map[channel_id] = config
                         
                         # Show filter info
@@ -175,7 +177,7 @@ class TestListener:
             return
         
         print("="*70)
-        print(f"👂 LISTENING to {len(channel_ids)} channels...")
+        print(f"👂 LISTENING to {len(channel_entities)} channels...")
         print("="*70)
         print("Waiting for new messages... (Press Ctrl+C to stop)")
         print()
@@ -184,8 +186,8 @@ class TestListener:
         print("="*70)
         print()
         
-        # Register event handler
-        @self.client.on(events.NewMessage(chats=channel_ids))
+        # Register event handler - USE ENTITIES instead of IDs
+        @self.client.on(events.NewMessage(chats=channel_entities))
         async def handler(event):
             await self.handle_message(event)
         
@@ -193,7 +195,7 @@ class TestListener:
         @self.client.on(events.NewMessage())
         async def debug_handler(event):
             # Only log if it's NOT from our monitored channels
-            if event.chat_id not in channel_ids:
+            if event.chat_id not in channel_ids and event.chat_id not in self.channels_map:
                 chat_name = "Unknown"
                 try:
                     chat = await event.get_chat()
