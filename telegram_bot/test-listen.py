@@ -133,7 +133,14 @@ class TestListener:
                     if is_member:
                         channel_ids.append(channel_id)
                         channel_entities.append(entity)  # Store the entity
+                        
+                        # Store in map with BOTH ID formats (positive and with -100 prefix)
                         self.channels_map[channel_id] = config
+                        # Also store with the -100 prefix format that events use
+                        event_id = -1000000000000 - channel_id
+                        self.channels_map[event_id] = config
+                        
+                        print(f"   📊 Stored with IDs: {channel_id} and {event_id}")
                         
                         # Show filter info
                         filter_config = config.get('filter', {})
@@ -195,14 +202,14 @@ class TestListener:
         @self.client.on(events.NewMessage())
         async def debug_handler(event):
             # Only log if it's NOT from our monitored channels
-            if event.chat_id not in channel_ids and event.chat_id not in self.channels_map:
+            if event.chat_id not in self.channels_map:
                 chat_name = "Unknown"
                 try:
                     chat = await event.get_chat()
                     chat_name = getattr(chat, 'title', getattr(chat, 'first_name', 'Unknown'))
                 except:
                     pass
-                print(f"🔔 Debug: Message detected in other chat: {chat_name} (ID: {event.chat_id})")
+                print(f"🔔 Debug: Message from unmonitored chat: {chat_name} (ID: {event.chat_id})")
         
         # Keep running
         await self.client.run_until_disconnected()
