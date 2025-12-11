@@ -54,6 +54,23 @@ CHANNELS_CONFIG = load_channels_config()
 # State file
 STATE_FILE = 'sessions/monitor_state.pkl'
 
+# Session file check
+SESSION_FILE = 'sessions/monitor_session.session'
+
+def check_session_exists():
+    """Check if session file exists"""
+    if not os.path.exists(SESSION_FILE):
+        print("="*60)
+        print("❌ ERROR: Session file not found!")
+        print("="*60)
+        print()
+        print("You need to login first. Run:")
+        print("   python3 login_telegram.py")
+        print()
+        print("="*60)
+        return False
+    return True
+
 class SearchAndListenMonitor:
     """Monitor that searches history first, then listens for new messages"""
     
@@ -113,16 +130,26 @@ class SearchAndListenMonitor:
                 break
     
     async def connect_with_retry(self):
-        """Connect to Telegram with retry logic"""
+        """Connect to Telegram with retry logic using existing session"""
         for attempt in range(1, self.max_reconnect_attempts + 1):
             try:
                 print(f"🔌 Connection attempt {attempt}/{self.max_reconnect_attempts}...")
                 
+                # Connect using existing session file
                 if not self.client.is_connected():
                     await self.client.connect()
                 
+                # Check if authorized
+                if not await self.client.is_user_authorized():
+                    print("   ❌ Session is not authorized!")
+                    print("   Please run: python3 login_telegram.py")
+                    return False
+                
                 # Verify connection by getting user info
                 me = await self.client.get_me()
+                
+                if me is None:
+                    raise Exception("Failed to get user info")
                 
                 self.is_connected = True
                 self.reconnect_attempts = 0
@@ -146,10 +173,12 @@ class SearchAndListenMonitor:
                 print(f"   ⏱️  Timeout on attempt {attempt}")
             except ServerError as e:
                 print(f"   🔴 Server error on attempt {attempt}: {e}")
-            except OSError  as e:
+            except OSError as e:
                 print(f"   🔌 Connection error on attempt {attempt}: {e}")
             except Exception as e:
                 print(f"   ❌ Unexpected error on attempt {attempt}: {e}")
+                import traceback
+                traceback.print_exc()
             
             if attempt < self.max_reconnect_attempts:
                 delay = RECONNECT_DELAY * attempt  # Exponential backoff
@@ -520,6 +549,10 @@ class SearchAndListenMonitor:
                 await asyncio.sleep(RECONNECT_DELAY)
 
 async def main():
+    # Check if session file exists before starting
+    if not check_session_exists():
+        return
+    
     monitor = SearchAndListenMonitor()
     await monitor.run_monitor()
 
