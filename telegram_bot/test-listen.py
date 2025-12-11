@@ -74,7 +74,7 @@ class TestListener:
                 filter_value = filter_config.get('value', [])
                 
                 print(f"{idx}. ✅ {channel_name}")
-                print(f"   Username: @{channel_username}")
+                print(f"   Username: {channel_username}")
                 print(f"   Channel ID: {channel_id}")
                 print(f"   Filter Type: {filter_type}")
                 
