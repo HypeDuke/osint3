@@ -142,6 +142,151 @@ class RealtimeListener:
         elif filter_type == 'regex':
             print(f"   🔍 Pattern: {filter_value}")
     
+    def _get_message_attachments(self, message):
+        """
+        Extract attachment information from message
+        
+        Returns:
+            List of dicts with attachment info: [{'type': 'Photo', 'name': 'image.jpg', 'size': '1.2 MB'}, ...]
+        """
+        attachments = []
+        
+        try:
+            # Check for photo
+            if message.photo:
+                size = self._format_size(message.photo.sizes[-1].size) if hasattr(message.photo.sizes[-1], 'size') else 'Unknown'
+                attachments.append({
+                    'type': 'Photo',
+                    'name': f'photo_{message.id}.jpg',
+                    'size': size
+                })
+            
+            # Check for document (files)
+            if message.document:
+                doc = message.document
+                filename = 'unknown_file'
+                
+                # Try to get filename from attributes
+                for attr in doc.attributes:
+                    if hasattr(attr, 'file_name'):
+                        filename = attr.file_name
+                        break
+                
+                size = self._format_size(doc.size)
+                mime_type = doc.mime_type if hasattr(doc, 'mime_type') else 'unknown'
+                
+                attachments.append({
+                    'type': 'Document',
+                    'name': filename,
+                    'size': size,
+                    'mime_type': mime_type
+                })
+            
+            # Check for video
+            if message.video:
+                video = message.video
+                filename = f'video_{message.id}.mp4'
+                
+                for attr in video.attributes:
+                    if hasattr(attr, 'file_name'):
+                        filename = attr.file_name
+                        break
+                
+                size = self._format_size(video.size)
+                duration = f"{video.duration}s" if hasattr(video, 'duration') else 'Unknown'
+                
+                attachments.append({
+                    'type': 'Video',
+                    'name': filename,
+                    'size': size,
+                    'duration': duration
+                })
+            
+            # Check for audio
+            if message.audio:
+                audio = message.audio
+                filename = f'audio_{message.id}.mp3'
+                
+                for attr in audio.attributes:
+                    if hasattr(attr, 'file_name'):
+                        filename = attr.file_name
+                        break
+                
+                size = self._format_size(audio.size)
+                duration = f"{audio.duration}s" if hasattr(audio, 'duration') else 'Unknown'
+                
+                attachments.append({
+                    'type': 'Audio',
+                    'name': filename,
+                    'size': size,
+                    'duration': duration
+                })
+            
+            # Check for voice message
+            if message.voice:
+                voice = message.voice
+                size = self._format_size(voice.size)
+                duration = f"{voice.duration}s" if hasattr(voice, 'duration') else 'Unknown'
+                
+                attachments.append({
+                    'type': 'Voice',
+                    'name': f'voice_{message.id}.ogg',
+                    'size': size,
+                    'duration': duration
+                })
+            
+            # Check for sticker
+            if message.sticker:
+                attachments.append({
+                    'type': 'Sticker',
+                    'name': 'sticker',
+                    'size': 'N/A'
+                })
+            
+            # Check for poll
+            if message.poll:
+                attachments.append({
+                    'type': 'Poll',
+                    'name': message.poll.question,
+                    'size': 'N/A'
+                })
+            
+            # Check for contact
+            if message.contact:
+                contact_name = f"{message.contact.first_name} {message.contact.last_name or ''}".strip()
+                attachments.append({
+                    'type': 'Contact',
+                    'name': contact_name,
+                    'size': 'N/A'
+                })
+            
+            # Check for location
+            if message.geo:
+                attachments.append({
+                    'type': 'Location',
+                    'name': f'lat:{message.geo.lat}, lon:{message.geo.long}',
+                    'size': 'N/A'
+                })
+        
+        except Exception as e:
+            print(f"   ⚠️  Error parsing attachments: {e}")
+        
+        return attachments
+    
+    def _format_size(self, size_bytes):
+        """Format file size to human readable format"""
+        try:
+            size_bytes = int(size_bytes)
+            
+            for unit in ['B', 'KB', 'MB', 'GB']:
+                if size_bytes < 1024.0:
+                    return f"{size_bytes:.1f} {unit}"
+                size_bytes /= 1024.0
+            
+            return f"{size_bytes:.1f} TB"
+        except:
+            return "Unknown"
+    
     async def start_listening(self, save_state_callback=None):
         """
         Start listening for new messages
@@ -207,9 +352,17 @@ class RealtimeListener:
             if save_state_callback:
                 save_state_callback()
             
+            # Detect attachments
+            attachments = self._get_message_attachments(message)
+            
             # Check if message has text
             if not message.text:
-                print(f"   ⚠️  {channel_name}: Message has no text (ID: {message.id})")
+                if attachments:
+                    print(f"   ℹ️  {channel_name}: Message has only attachments (ID: {message.id})")
+                    for att in attachments:
+                        print(f"      📎 {att['type']}: {att['name']}")
+                else:
+                    print(f"   ⚠️  {channel_name}: Message has no text (ID: {message.id})")
                 return
             
             # Apply filter
@@ -223,7 +376,8 @@ class RealtimeListener:
             msg_data = {
                 'date': message.date.strftime('%Y-%m-%d %H:%M:%S'),
                 'text': message.text,
-                'id': message.id
+                'id': message.id,
+                'attachments': attachments
             }
             
             print(f"\n{'='*60}")
@@ -233,6 +387,10 @@ class RealtimeListener:
             print(f"   Date: {msg_data['date']}")
             if is_own_message:
                 print(f"   ⚠️  This is YOUR message")
+            if attachments:
+                print(f"   📎 Attachments: {len(attachments)}")
+                for att in attachments:
+                    print(f"      • {att['type']}: {att['name']} ({att['size']})")
             print(f"   Preview: {message.text[:100]}...")
             print(f"{'='*60}")
             

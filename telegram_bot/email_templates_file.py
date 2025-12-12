@@ -45,6 +45,49 @@ class EmailTemplate:
     """Email templates"""
     
     @staticmethod
+    def _format_attachments_html(attachments):
+        """Format attachments list as HTML"""
+        if not attachments:
+            return ""
+        
+        html = """
+        <div style="margin-top: 20px; padding: 15px; background: #f0f7ff; border-left: 3px solid #2196F3; border-radius: 4px;">
+            <div style="font-size: 11px; text-transform: uppercase; color: #1976D2; font-weight: 600; margin-bottom: 10px;">
+                📎 Attachments ({count})
+            </div>
+        """.format(count=len(attachments))
+        
+        for att in attachments:
+            icon = {
+                'Photo': '🖼️',
+                'Document': '📄',
+                'Video': '🎥',
+                'Audio': '🎵',
+                'Voice': '🎤',
+                'Sticker': '😀',
+                'Poll': '📊',
+                'Contact': '👤',
+                'Location': '📍'
+            }.get(att['type'], '📎')
+            
+            extra_info = ""
+            if 'duration' in att:
+                extra_info = f" • {att['duration']}"
+            if 'mime_type' in att:
+                extra_info += f" • {att['mime_type']}"
+            
+            html += f"""
+            <div style="padding: 8px 0; border-bottom: 1px solid #e0e0e0;">
+                <span style="font-weight: 600;">{icon} {att['type']}</span><br>
+                <span style="color: #666; font-size: 13px;">{att['name']}</span><br>
+                <span style="color: #999; font-size: 12px;">{att['size']}{extra_info}</span>
+            </div>
+            """
+        
+        html += "</div>"
+        return html
+    
+    @staticmethod
     def parse_message_data(text):
         """Parse structured data from message text"""
         source = content = detection_date = title = None
@@ -123,6 +166,8 @@ class EmailTemplate:
     def minimal_template(channel_name, message):
         """Minimal template for single message"""
         formatted_text = message['text'].replace('\n', '<br>')
+        attachments_html = EmailTemplate._format_attachments_html(message.get('attachments', []))
+        
         html = f"""
         <html>
         <body style="font-family: Arial, sans-serif; padding: 20px;">
@@ -131,6 +176,7 @@ class EmailTemplate:
             <div style="background: #f5f5f5; padding: 15px; border-left: 3px solid #333;">
                 {formatted_text}
             </div>
+            {attachments_html}
         </body>
         </html>
         """
@@ -140,6 +186,7 @@ class EmailTemplate:
     def breach_template(channel_name, message):
         """Breach detector template for single message"""
         parse_success, source, content, detection_date, title = EmailTemplate.parse_message_data(message['text'])
+        attachments_html = EmailTemplate._format_attachments_html(message.get('attachments', []))
         
         if parse_success and (source or content or detection_date):
             html = f"""
@@ -178,6 +225,7 @@ class EmailTemplate:
                             <div class="field-label">Detection Date</div>
                             <div class="field-value">{detection_date if detection_date else 'N/A'}</div>
                         </div>
+                        {attachments_html}
                     </div>
                     <div class="footer">
                         <div class="timestamp">Report generated: {message['date']}</div>
@@ -199,6 +247,7 @@ class EmailTemplate:
                 <div style="line-height: 1.6;">
                     {formatted_text}
                 </div>
+                {attachments_html}
             </body>
             </html>
             """
@@ -208,6 +257,7 @@ class EmailTemplate:
     def cve_template(channel_name, message):
         """CVE detector template for single message"""
         parse_success, source, content, detection_date, title = EmailTemplate.parse_message_data(message['text'])
+        attachments_html = EmailTemplate._format_attachments_html(message.get('attachments', []))
         
         if parse_success and (title or content):
             formatted_content = content.replace('\n', '<br>') if content else 'N/A'
@@ -249,6 +299,7 @@ class EmailTemplate:
                             <div class="field-label">Details & Description</div>
                             <div class="field-value">{formatted_content}</div>
                         </div>
+                        {attachments_html}
                     </div>
                     <div class="footer">
                         <div class="timestamp">Report generated: {message['date']}</div>
@@ -270,6 +321,7 @@ class EmailTemplate:
                 <div style="line-height: 1.6;">
                     {formatted_text}
                 </div>
+                {attachments_html}
             </body>
             </html>
             """
@@ -290,10 +342,13 @@ class EmailTemplate:
         
         for idx, msg in enumerate(messages, 1):
             formatted_text = msg['text'].replace('\n', '<br>')
+            attachments_html = EmailTemplate._format_attachments_html(msg.get('attachments', []))
+            
             html += f"""
             <div style="background: #f9f9f9; padding: 15px; margin: 15px 0; border-left: 3px solid #333;">
                 <strong>#{idx}</strong> - <small>{msg['date']}</small><br><br>
                 {formatted_text}
+                {attachments_html}
             </div>
             """
         
@@ -313,7 +368,7 @@ class EmailTemplate:
                 body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background-color: #f5f5f5; }}
                 .container {{ max-width: 800px; margin: 40px auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }}
                 .header {{ background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; padding: 35px; text-align: center; }}
-                .header h1 {{ margin: 0; font-size: 28px; font-weight: 600; color: blue; }}
+                .header h1 {{ margin: 0; font-size: 28px; font-weight: 600; }}
                 .header p {{ margin: 8px 0 0 0; opacity: 0.9; font-size: 15px; }}
                 .summary {{ padding: 25px 35px; background: #e3f2fd; border-bottom: 1px solid #e0e0e0; }}
                 .summary-item {{ display: inline-block; margin-right: 30px; }}
@@ -351,6 +406,7 @@ class EmailTemplate:
         
         for idx, msg in enumerate(messages, 1):
             parse_success, source, content, detection_date, title = EmailTemplate.parse_message_data(msg['text'])
+            attachments_html = EmailTemplate._format_attachments_html(msg.get('attachments', []))
             
             if not parse_success or not (source or content or detection_date):
                 formatted_text = msg['text'].replace('\n', '<br>')
@@ -365,6 +421,7 @@ class EmailTemplate:
                                 <div class="field-label">Raw Message Content</div>
                                 <div class="field-value">{formatted_text}</div>
                             </div>
+                            {attachments_html}
                         </div>
                     </div>
                 """
@@ -388,6 +445,7 @@ class EmailTemplate:
                                 <div class="field-label">Detection Date</div>
                                 <div class="field-value">{detection_date if detection_date else 'N/A'}</div>
                             </div>
+                            {attachments_html}
                         </div>
                     </div>
                 """
@@ -414,7 +472,7 @@ class EmailTemplate:
                 body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background-color: #f5f5f5; }}
                 .container {{ max-width: 850px; margin: 40px auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }}
                 .header {{ background: linear-gradient(135deg, #c62828 0%, #e53935 100%); color: white; padding: 35px; text-align: center; }}
-                .header h1 {{ margin: 0; font-size: 28px; font-weight: 600; color: red; }}
+                .header h1 {{ margin: 0; font-size: 28px; font-weight: 600; }}
                 .header p {{ margin: 8px 0 0 0; opacity: 0.9; font-size: 15px; }}
                 .summary {{ padding: 25px 35px; background: #fff3e0; border-bottom: 1px solid #e0e0e0; }}
                 .summary-item {{ display: inline-block; margin-right: 30px; }}
@@ -455,6 +513,7 @@ class EmailTemplate:
         
         for idx, msg in enumerate(messages, 1):
             parse_success, source, content, detection_date, title = EmailTemplate.parse_message_data(msg['text'])
+            attachments_html = EmailTemplate._format_attachments_html(msg.get('attachments', []))
             
             if not parse_success or not (title or content):
                 formatted_text = msg['text'].replace('\n', '<br>')
@@ -469,6 +528,7 @@ class EmailTemplate:
                                 <div class="field-label">Raw Message Content</div>
                                 <div class="field-value">{formatted_text}</div>
                             </div>
+                            {attachments_html}
                         </div>
                     </div>
                 """
@@ -485,10 +545,12 @@ class EmailTemplate:
                             <div class="title-section">
                                 <div class="title-value">{title if title else 'N/A'}</div>
                             </div>
+                            </div>
                             <div class="field">
                                 <div class="field-label">Details & Description</div>
                                 <div class="field-value">{formatted_content}</div>
                             </div>
+                            {attachments_html}
                         </div>
                     </div>
                 """
