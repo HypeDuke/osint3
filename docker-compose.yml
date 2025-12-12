@@ -77,7 +77,8 @@ services:
       - elasticsearch
      
     volumes:
-      - ./telegram_bot/sessions:/app/sessions 
+      - ./telegram_bot/sessions:/app/sessions
+      - ./telegram_bot/channels.json:/app/channels.json 
 
 volumes:
   esdata:

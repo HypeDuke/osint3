@@ -13,7 +13,7 @@ COPY channel_search.py .
 COPY realtime_listener.py .
 COPY email_templates_file.py .
 COPY monitor.py .
-COPY channels.json .
+#COPY channels.json .
 
 # Create directories for session files and logs
 RUN mkdir -p /app/sessions /app/logs
