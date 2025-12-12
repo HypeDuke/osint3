@@ -31,5 +31,16 @@
     },
     "email_subject": "Data Leak Alert",
     "template": "breach"
+  },
+  {
+    "name": "infosecnews",
+    "username": "@significat123",
+    "limit": 20,
+    "filter": {
+      "type": "contains",
+      "value": ["napas"]
+    },
+    "email_subject": "Data Leak Alert",
+    "template": "breach"
   }
 ]
